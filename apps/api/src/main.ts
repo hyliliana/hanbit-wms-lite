@@ -13,7 +13,8 @@ async function bootstrap() {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-  app.enableCors({ origin: allowed });
+  // "*" 또는 *.vercel.app 미리보기 주소도 허용
+  app.enableCors({ origin: allowed.includes("*") ? true : (o, cb) => cb(null, !o || allowed.includes(o) || /\.vercel\.app$/.test(o) && allowed.some((a) => a.endsWith(".vercel.app"))) });
 
   // Render는 PORT 환경변수로 포트를 정해 준다
   const port = Number(process.env.PORT ?? 4000);
