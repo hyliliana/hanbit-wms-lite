@@ -213,6 +213,9 @@ function Worker({ api, user }: { api: Api; user: User }) {
             <div className="card" key={c.id} style={{ borderColor: "var(--warn)", background: "var(--warn-bg)" }}>
               <b>📢 {c.shipper} {c.kind === "GUIDE" ? "지침서" : "계약서"} 제{c.version}판으로 바뀌었습니다</b>
               {c.summary && <div style={{ whiteSpace: "pre-wrap", marginTop: 6, fontSize: 14 }}>{c.summary}</div>}
+              <div style={{ marginTop: 8 }}>
+                {c.ackedAt ? <span className="chip ok">읽음 확인 {fmtTime(c.ackedAt)}</span> : <button className="btn" onClick={async () => { await api(`/documents/${c.id}/ack`, { method: "POST" }); load(); }}>읽었습니다</button>}
+              </div>
             </div>
           ))}
           {planned.length === 0 && <div className="card muted">남은 입고 작업이 없습니다.</div>}
@@ -324,20 +327,21 @@ function DamageForm({ api, shippers, preset, onDone }: { api: Api; shippers: any
         <option value="">화주사를 고르세요</option>
         {shippers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
       </select>
-      <label>품목 (선택)</label>
+      <label>입고 물건 (필수)</label>
       <select value={itemId} onChange={(e) => setItemId(e.target.value)}>
-        <option value="">모름 / 선택 안 함</option>
+        <option value="">품목을 고르세요</option>
         {items.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
       </select>
       <label>파손 수량 (박스)</label>
       <input inputMode="numeric" value={qty} onChange={(e) => setQty(e.target.value.replace(/[^0-9]/g, ""))} />
       <label>어떤 파손인가요</label>
       <textarea value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="예: 박스 한쪽이 젖어 있고 바닥이 눌렸음" />
-      <label>사진</label>
+      <label>사진 (필수)</label>
       <input type="file" accept="image/*" capture="environment" onChange={async (e) => { const f = e.target.files?.[0]; if (f) setPhoto(await shrink(f)); }} />
       {photo && <img src={photo} className="photo" alt="파손 사진" style={{ marginTop: 8 }} />}
+      <p className="muted">발견 시각은 보고하는 순간 자동으로 기록됩니다. {!photo ? "· 사진을 붙여야 보낼 수 있습니다" : ""}</p>
       {err && <div className="err">{err}</div>}
-      <div style={{ marginTop: 12 }}><button className="btn big danger" disabled={!sid || !desc.trim() || busy} onClick={submit}>{busy ? "보내는 중... (지침 찾는 중)" : "관리자에게 바로 보고"}</button></div>
+      <div style={{ marginTop: 12 }}><button className="btn big danger" disabled={!sid || !desc.trim() || !photo || (!itemId && !preset) || busy} onClick={submit}>{busy ? "보내는 중... (지침 찾는 중)" : "관리자에게 바로 보고"}</button></div>
     </div>
   );
 }
@@ -360,6 +364,11 @@ function Manager({ api, user }: { api: Api; user: User }) {
         <button className={tab === "docs" ? "on" : ""} onClick={() => setTab("docs")}>지침서·계약서</button>
         <button className={tab === "ask" ? "on" : ""} onClick={() => setTab("ask")}>규칙 질문</button>
       </div>
+      {dash?.overdueDamages > 0 && (
+        <div className="err" style={{ fontSize: 15, cursor: "pointer" }} onClick={() => setTab("damage")}>
+          🔔 {user.role === "ADMIN" ? "센터장 알림: " : ""}{dash.damageSlaMinutes}분 넘게 확인 안 된 파손 {dash.overdueDamages}건{user.role === "ADMIN" ? " — 관리자 확인이 늦어지고 있습니다" : " — 센터장 화면에도 알림이 표시됩니다"}
+        </div>
+      )}
       {tab === "home" && !dash && <div className="card muted">현황을 불러오는 중...</div>}
       {tab === "home" && dash && (
         <div className="grid">
@@ -380,7 +389,7 @@ function Manager({ api, user }: { api: Api; user: User }) {
 }
 
 function NotifyDue({ d }: { d: any }) {
-  if (!d.notifyDueAt) return <div className="diffbox chg"><b>화주사 통보 기한:</b> 지침서에서 기한을 찾지 못했습니다. 화주사에 확인하세요.</div>;
+  if (!d.notifyDueAt) return <div className="diffbox chg"><b>화주사 통보 기한 없음 · 관리자 판단</b> (현행 지침서에 기한이 없고, 센터 기본값도 없음)</div>;
   const left = Math.round((new Date(d.notifyDueAt).getTime() - Date.now()) / 60000);
   const late = !d.notifiedAt && left < 0;
   const leftText = left >= 60 ? `${Math.floor(left / 60)}시간 ${left % 60}분 남음` : left >= 0 ? `${left}분 남음` : `${Math.abs(left)}분 지남`;
@@ -513,10 +522,10 @@ function Stock({ api, shippers, fixed }: { api: Api; shippers: any[]; fixed?: bo
       {err && <div className="err">{err}</div>}
       <div className="table-wrap">
         <table>
-          <thead><tr>{!fixed && <th>화주사</th>}<th>품목</th><th>구역</th><th>위치</th><th>로트</th><th>수량</th><th>입고일</th><th>유통기한</th></tr></thead>
+          <thead><tr>{!fixed && <th>화주사</th>}<th>품목</th><th>구역</th>{!fixed && <th>위치</th>}<th>로트</th><th>수량</th><th>입고일</th><th>유통기한</th></tr></thead>
           <tbody>
             {list.map((l) => (
-              <tr key={l.id}>{!fixed && <td>{l.shipper.name}</td>}<td>{l.item.name}</td><td><span className={`chip ${l.item.zone}`}>{ZONE[l.item.zone]}</span></td><td>{l.location}</td><td>{l.lotNo}</td><td><b>{l.qty}</b></td><td>{fmtDate(l.receivedAt)}</td><td>{fmtDate(l.expiryDate)}</td></tr>
+              <tr key={l.id}>{!fixed && <td>{l.shipper.name}</td>}<td>{l.item.name}</td><td><span className={`chip ${l.item.zone}`}>{ZONE[l.item.zone]}</span></td>{!fixed && <td>{l.location}</td>}<td>{l.lotNo}</td><td><b>{l.qty}</b></td><td>{fmtDate(l.receivedAt)}</td><td>{fmtDate(l.expiryDate)}</td></tr>
             ))}
             {list.length === 0 && <tr><td colSpan={8} className="muted">재고가 없습니다.</td></tr>}
           </tbody>
@@ -562,13 +571,13 @@ function Docs({ api, shippers }: { api: Api; shippers: any[] }) {
         <h2>문서 목록</h2>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>화주사</th><th>종류</th><th>제목</th><th>판</th><th>상태</th><th>조항</th><th>올린 날</th><th></th></tr></thead>
+            <thead><tr><th>화주사</th><th>종류</th><th>제목</th><th>판</th><th>상태</th><th>작업자 읽음</th><th>조항</th><th>올린 날</th><th></th></tr></thead>
             <tbody>
               {list.map((d) => (
                 <tr key={d.id}>
                   <td>{d.shipper.name}</td><td>{d.kind === "GUIDE" ? "지침서" : "계약서"}</td><td>{d.title}</td><td>제{d.version}판</td>
-                  <td>{d.isCurrent ? <span className="chip ok">현행</span> : <span className="chip">보관</span>}</td><td>{d._count.chunks}</td><td>{fmtTime(d.createdAt)}</td>
-                  <td><button className="btn ghost" onClick={async () => setOpen(await api(`/documents/${d.id}`))}>보기</button></td>
+                  <td>{d.isCurrent ? <span className="chip ok">현행</span> : <span className="chip">보관</span>}</td><td>{d.version > 1 ? `${d._count.acks}명` : "-"}</td><td>{d._count.chunks}</td><td>{fmtTime(d.createdAt)}</td>
+                  <td><button className="btn ghost" onClick={async () => { const doc = await api(`/documents/${d.id}`); doc.ackInfo = d.version > 1 ? await api(`/documents/${d.id}/acks`) : null; setOpen(doc); }}>보기</button></td>
                 </tr>
               ))}
             </tbody>
@@ -578,6 +587,9 @@ function Docs({ api, shippers }: { api: Api; shippers: any[] }) {
       {open && (
         <div className="card">
           <div className="row" style={{ justifyContent: "space-between" }}><h2 style={{ margin: 0 }}>{open.title} · 제{open.version}판</h2><button className="btn ghost" onClick={() => setOpen(null)}>닫기</button></div>
+          {open.ackInfo && (
+            <div className="diffbox chg"><b>작업자 읽음 확인 {open.ackInfo.read}/{open.ackInfo.total}명</b> · {open.ackInfo.workers.map((w: any) => `${w.name} ${w.ackedAt ? "✓ " + fmtTime(w.ackedAt) : "미확인"}`).join(" · ")}</div>
+          )}
           {open.changeSummary && <ChangeView doc={open} />}
           {open.chunks.map((c: any, i: number) => <div className="cite" key={i}><b>{c.section}</b><div>{c.text}</div></div>)}
         </div>
@@ -632,7 +644,6 @@ function ShipperView({ api, user }: { api: Api; user: User }) {
               <div className="row">{d.status === "REPORTED" ? <span className="chip warn">센터 확인 중</span> : <span className="chip ok">센터 확인 완료</span>}<b>{d.item?.name ?? "품목 미지정"}</b><span className="muted">{d.qty}박스 · {fmtTime(d.createdAt)}</span></div>
               <p>{d.description}</p>
               {d.photo && <img src={d.photo} className="photo" alt="파손 사진" />}
-              {d.managerNote && <p className="muted">센터 메모: {d.managerNote}</p>}
               {d.notifiedAt && <p className="muted">센터 통보: {fmtTime(d.notifiedAt)}</p>}
             </div>
           ))}

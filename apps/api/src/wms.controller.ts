@@ -86,7 +86,10 @@ export class WmsController {
       include: { item: true, shipper: true, assignee: { select: { name: true } } },
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],
     });
-    return rows.map((w) => ({ ...w, diff: w.actualQty === null ? null : w.actualQty - w.expectedQty }));
+    const out = rows.map((w) => ({ ...w, diff: w.actualQty === null ? null : w.actualQty - w.expectedQty }));
+    // 화주사: 입고 완료 여부·시각·수량 차이만. 보관 위치·작업자·센터 메모 제외
+    if (u.role === "SHIPPER") return out.map(({ location, assignee, assigneeId, note, ...r }) => r);
+    return out;
   }
 
   @Roles(...OFFICE)
@@ -140,11 +143,14 @@ export class WmsController {
   @Get("stock")
   async stock(@Req() req: any, @Query("shipperId") sid?: string) {
     const shipperId = scopeShipper(req.user, int(sid));
-    return this.prisma.stockLot.findMany({
+    const rows = await this.prisma.stockLot.findMany({
       where: { shipperId, qty: { gt: 0 } },
       include: { item: true, shipper: true },
       orderBy: [{ shipperId: "asc" }, { expiryDate: "asc" }],
     });
+    // 2차 인터뷰(최 과장): 보관 위치 공개 여부 미정 → 화주사에게는 보내지 않는다
+    if (req.user.role === "SHIPPER") return rows.map(({ location, ...r }) => r);
+    return rows;
   }
 
   // ───────── 파손 보고 ─────────
@@ -155,7 +161,10 @@ export class WmsController {
     const shipper = await this.prisma.shipper.findUnique({ where: { id: Number(b.shipperId) } });
     if (!shipper) throw new BadRequestException("화주사를 고르세요");
     if (!b.description?.trim()) throw new BadRequestException("어떤 파손인지 적어 주세요");
-    if (b.photo && String(b.photo).length > 1_500_000) throw new BadRequestException("사진이 너무 큽니다");
+    // 2차 인터뷰(센터장): 사진·발견 시각·입고 물건 식별은 꼭 필요 (발견 시각 = 보고 시각, 서버가 자동 기록)
+    if (!b.photo || !String(b.photo).startsWith("data:image/")) throw new BadRequestException("파손 사진을 첨부해야 보고할 수 있습니다");
+    if (String(b.photo).length > 1_500_000) throw new BadRequestException("사진이 너무 큽니다");
+    if (!int(b.itemId) && !int(b.workOrderId)) throw new BadRequestException("어떤 입고 물건인지(품목 또는 작업지시) 골라야 합니다");
     const itemId = int(b.itemId);
     if (itemId) {
       const it = await this.prisma.item.findUnique({ where: { id: itemId } });
@@ -215,7 +224,7 @@ export class WmsController {
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],
     });
     // 화주사에게는 센터 내부 처리 지침(AI 첨부·근거 원문)을 내려보내지 않는다
-    if (u.role === "SHIPPER") return rows.map(({ aiGuidance, aiCitations, notifySource, ...r }) => r);
+    if (u.role === "SHIPPER") return rows.map(({ aiGuidance, aiCitations, notifySource, managerNote, confirmedBy, confirmedById, notifiedById, ...r }) => r);
     return rows;
   }
 
@@ -264,7 +273,7 @@ export class WmsController {
   async documents(@Query("shipperId") sid?: string) {
     return this.prisma.document.findMany({
       where: { shipperId: int(sid) },
-      include: { shipper: true, _count: { select: { chunks: true } } },
+      include: { shipper: true, _count: { select: { chunks: true, acks: true } } },
       orderBy: [{ shipperId: "asc" }, { kind: "asc" }, { version: "desc" }],
     });
   }
@@ -334,13 +343,38 @@ export class WmsController {
   /** 최근 개정된 문서 (작업자 화면 알림용) — 인터뷰(관리자 김): 현장 관련 변경은 작업자도 알아야 함 */
   @Roles(...STAFF)
   @Get("documents-recent-changes")
-  async recentChanges() {
+  async recentChanges(@Req() req: any) {
     const docs = await this.prisma.document.findMany({
       where: { isCurrent: true, version: { gt: 1 }, createdAt: { gt: new Date(Date.now() - 14 * 86400e3) } },
-      include: { shipper: true },
+      include: { shipper: true, acks: { where: { userId: req.user.id } } },
       orderBy: { createdAt: "desc" },
     });
-    return docs.map((d) => ({ id: d.id, shipper: d.shipper.name, title: d.title, version: d.version, kind: d.kind, createdAt: d.createdAt, summary: (d.changeSummary as any)?.summary ?? null }));
+    return docs.map((d) => ({ id: d.id, shipper: d.shipper.name, title: d.title, version: d.version, kind: d.kind, createdAt: d.createdAt, summary: (d.changeSummary as any)?.summary ?? null, ackedAt: d.acks[0]?.ackedAt ?? null }));
+  }
+
+  /** 개정 읽음 확인: 판당 1회 (2차 인터뷰 관리자 김 "너무 자주 누르면 번거롭다") */
+  @Roles(...STAFF)
+  @Post("documents/:id/ack")
+  async ack(@Req() req: any, @Param("id", ParseIntPipe) id: number) {
+    const d = await this.prisma.document.findUnique({ where: { id } });
+    if (!d) throw new NotFoundException("문서가 없습니다");
+    return this.prisma.docAck.upsert({
+      where: { documentId_userId: { documentId: id, userId: req.user.id } },
+      update: {},
+      create: { documentId: id, userId: req.user.id },
+    });
+  }
+
+  /** 판별 읽음 현황 (관리자) */
+  @Roles(...OFFICE)
+  @Get("documents/:id/acks")
+  async acks(@Param("id", ParseIntPipe) id: number) {
+    const [workers, acks] = await Promise.all([
+      this.prisma.user.findMany({ where: { role: "WORKER" }, select: { id: true, name: true } }),
+      this.prisma.docAck.findMany({ where: { documentId: id }, include: { user: { select: { name: true, role: true } } } }),
+    ]);
+    const map = new Map(acks.map((a) => [a.userId, a.ackedAt]));
+    return { total: workers.length, read: workers.filter((w) => map.has(w.id)).length, workers: workers.map((w) => ({ name: w.name, ackedAt: map.get(w.id) ?? null })) };
   }
 
   // ───────── 근거 Q&A ─────────

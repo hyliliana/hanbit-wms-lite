@@ -98,6 +98,7 @@ async function main() {
   await prisma.damageReport.create({
     data: {
       shipperId: fresh.id, itemId: milk.id, reporterId: jang.id, qty: 2, description: desc, createdAt: reported,
+      photo: "data:image/jpeg;base64," + readFileSync(join(__dirname, "demo-photo.jpg")).toString("base64"),
       aiGuidance: ans.answer, aiCitations: cites.map((c) => ({ title: c.title, version: c.version, section: c.section, text: c.text })),
       notifyHours: 2, notifyDueAt: new Date(reported.getTime() + 2 * 3600e3), notifySource: "신선마켓(FRESH) 물류 취급 지침서 제1판 · 제4조 (파손 입고 시 처리)",
     },
