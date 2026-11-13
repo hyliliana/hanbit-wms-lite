@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>한빛 WMS Lite 발표</title>
+<style>
+  :root{
+    --ink:#14202e; --ink2:#4a5868; --mute:#8592a1; --line:#dde3ea;
+    --bg:#f4f6f8; --paper:#ffffff; --navy:#16324f; --navy2:#22476d;
+    --accent:#e8711a; --accent-soft:#fdeee2; --ok:#1f8a5b; --ok-soft:#e3f4ec;
+    --bad:#c8372d; --bad-soft:#fbe7e5; --cold:#2a7fb8; --cold-soft:#e3f0f9;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:#0d1621;overflow:hidden}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Noto Sans KR","Malgun Gothic",sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased;word-break:keep-all}
+  #stage{position:absolute;left:50%;top:50%;width:1280px;height:720px;transform-origin:center center}
+  .slide{position:absolute;inset:0;background:var(--paper);padding:64px 80px 56px;display:none;flex-direction:column}
+  .slide.on{display:flex}
+  .slide.dark{background:var(--navy);color:#fff}
+  .kicker{font-size:15px;font-weight:700;letter-spacing:.08em;color:var(--accent);margin-bottom:14px}
+  h1{font-size:60px;line-height:1.15;font-weight:800;letter-spacing:-.02em}
+  h2{font-size:38px;line-height:1.25;font-weight:800;letter-spacing:-.015em;margin-bottom:28px}
+  h3{font-size:21px;font-weight:700;margin-bottom:10px}
+  p,li{font-size:20px;line-height:1.6;color:var(--ink2)}
+  .dark p,.dark li{color:#c9d6e3}
+  ul{list-style:none}
+  ul.dots li{position:relative;padding-left:22px;margin-bottom:8px}
+  ul.dots li:before{content:"";position:absolute;left:2px;top:13px;width:8px;height:8px;border-radius:50%;background:var(--accent)}
+  .grid{display:grid;gap:22px;flex:1;min-height:0}
+  .g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(4,1fr)}
+  .card{background:var(--bg);border-radius:14px;padding:24px 26px;border:1px solid var(--line)}
+  .card p,.card li{font-size:17px}
+  .tag{display:inline-block;font-size:13px;font-weight:700;padding:4px 10px;border-radius:999px;margin-bottom:12px}
+  .t-acc{background:var(--accent-soft);color:#a94e0c}.t-ok{background:var(--ok-soft);color:var(--ok)}
+  .t-bad{background:var(--bad-soft);color:var(--bad)}.t-cold{background:var(--cold-soft);color:var(--cold)}
+  .foot{position:absolute;left:80px;right:80px;bottom:24px;display:flex;justify-content:space-between;font-size:13px;color:var(--mute)}
+  .dark .foot{color:#7f97ae}
+  table{width:100%;border-collapse:collapse;font-size:16px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink2)}
+  th{font-size:13px;color:var(--mute);font-weight:700;letter-spacing:.04em;background:var(--bg)}
+  td b{color:var(--ink)}
+  .quote{border-left:4px solid var(--accent);padding:6px 0 6px 18px;margin-bottom:14px}
+  .quote p{font-size:19px;color:var(--ink)}.quote span{font-size:14px;color:var(--mute)}
+  .flow{display:flex;align-items:stretch;gap:10px}
+  .flow .step{flex:1;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .flow .step > b{display:block;font-size:13px;color:var(--accent);margin-bottom:6px}
+  .flow .step p b{color:var(--ink)}
+  .flow .step p{font-size:15px;line-height:1.5}
+  .flow .arr{align-self:center;color:var(--mute);font-size:22px}
+  .big{font-size:76px;font-weight:800;color:var(--accent);line-height:1}
+  .num{font-size:44px;font-weight:800;color:var(--navy)}
+  .lane{display:grid;grid-template-columns:140px 1fr;gap:14px;align-items:center;margin-bottom:14px}
+  .lane .who{font-weight:800;font-size:17px;color:var(--navy);background:var(--bg);border-radius:10px;padding:14px;text-align:center;border:1px solid var(--line)}
+  .pill{display:inline-block;background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:15px;color:var(--ink2);margin:3px 4px 3px 0}
+  .pill.hot{border-color:var(--accent);color:#a94e0c;background:var(--accent-soft)}
+  .timer{font-variant-numeric:tabular-nums;font-weight:800;color:var(--accent);font-size:15px;min-width:64px;display:inline-block}
+  .demo li{display:flex;gap:14px;align-items:flex-start;padding:11px 0;border-bottom:1px dashed var(--line);font-size:18px}
+  .demo li:last-child{border-bottom:0}
+  .cover-bar{position:absolute;left:0;top:0;bottom:0;width:14px;background:var(--accent)}
+  .scene{font-size:26px;line-height:1.7;color:#e7eef5;max-width:980px}
+  .scene em{font-style:normal;color:#ffb27a;font-weight:700}
+  .todo{color:var(--mute);font-style:italic}
+  #hud{position:fixed;right:18px;bottom:14px;color:#6c8197;font:12px/1 -apple-system,sans-serif;user-select:none}
+  #bar{position:fixed;left:0;bottom:0;height:3px;background:var(--accent);transition:width .2s}
+  @media print{
+    html,body{overflow:visible;background:#fff}
+    #stage{position:static;transform:none!important;width:auto;height:auto}
+    .slide{display:flex!important;position:relative;width:1280px;height:720px;page-break-after:always}
+    #hud,#bar{display:none}
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+
+<!-- 1 표지 -->
+<section class="slide dark">
+  <div class="cover-bar"></div>
+  <div style="margin-top:auto">
+    <div class="kicker">FDE 빌더 해커톤 · 고객사 13</div>
+    <h1>화주사 18곳의 서로 다른 규칙을<br>현장에서 바로 찾고 지키는 창고</h1>
+    <p style="margin-top:22px;font-size:24px;color:#fff">한빛물류 이천센터 · <b>한빛 WMS Lite</b></p>
+  </div>
+  <div style="margin-top:auto;display:flex;gap:40px">
+    <p>발표 나혜연</p><p>2026. 11. 13</p><p>Next.js · NestJS · PostgreSQL · OpenAI</p>
+  </div>
+</section>
+
+<!-- 2 장면 -->
+<section class="slide dark">
+  <div class="kicker">월요일 오전, 냉장 구역</div>
+  <p class="scene">작업자 장 씨가 입고된 박스 하나가 <em>젖어 있는 것</em>을 발견합니다. 사진을 찍어 관리자 단체방에 올리지만, 관리자는 출고 작업 중이라 <em>한 시간 뒤에</em> 봅니다.</p>
+  <p class="scene" style="margin-top:22px">최 과장은 이 화주사의 취급 지침서에서 "파손 입고 시 처리 방법"을 찾습니다. <em>화주사마다 지침이 달라서</em>, 어떤 곳은 바로 반송하고 어떤 곳은 사진만 보내고 보관합니다.</p>
+  <div class="grid g3" style="margin-top:auto;flex:none">
+    <div><div class="big">18</div><p>화주사 수, 화주사마다 규칙이 다름</p></div>
+    <div><div class="big">10~80쪽</div><p>화주사별 취급 지침서 분량</p></div>
+    <div><div class="big">1시간</div><p>파손 보고가 관리자에게 닿기까지</p></div>
+  </div>
+  <div class="foot"><span>고객사 소개·인터뷰 원문 기준</span><span>2</span></div>
+</section>
+
+<!-- 3 진짜 문제 -->
+<section class="slide">
+  <div class="kicker">고객의 진짜 문제</div>
+  <h2>"규칙이 없어서"가 아니라<br>"규칙이 18개라서, 필요한 순간에 안 보여서"</h2>
+  <div class="grid g3">
+    <div class="card"><span class="tag t-bad">현상</span><h3>파손이 묻힌다</h3><p>단체방에 올린 사진이 다른 메시지에 묻히고, 관리자는 늦게 봅니다. 그사이 박스는 어디에 둘지 정해지지 않습니다.</p></div>
+    <div class="card"><span class="tag t-acc">원인</span><h3>화주사별 규칙이 문서 속에 있다</h3><p>지침서 18종, 계약서 18건. 반송·격리·통보 시한·온도가 모두 다르고, 개정판이 와도 바뀐 곳을 모릅니다.</p></div>
+    <div class="card"><span class="tag t-cold">영향</span><h3>책임과 신뢰의 문제</h3><p>통보 시한을 놓치거나 다른 화주사 규칙을 적용하면 파손 책임이 센터로 넘어오고, 화주사 문의 전화가 늘어납니다.</p></div>
+  </div>
+  <div class="foot"><span>요구사항 정의서 참고</span><span>3</span></div>
+</section>
+
+<!-- 4 인터뷰로 확인한 것 -->
+<section class="slide">
+  <div class="kicker">인터뷰로 확인한 것</div>
+  <h2>모호한 말을 질문으로 바꿔 확인했습니다</h2>
+  <div class="grid g2">
+    <div>
+      <div class="quote"><p>"단체방에 올리면 묻혀요."</p><span>작업자 장 씨</span></div>
+      <div class="quote"><p>"지침서가 10쪽짜리도, 80쪽짜리도 있어요. 다 외울 수가 없어요."</p><span>최 과장</span></div>
+      <div class="quote"><p>"지침서가 바뀌었다고 메일이 오는데, 바뀐 부분이 어딘지 몰라요."</p><span>관리자 김</span></div>
+      <div class="quote"><p>"화주사가 다른 화주사 물건을 보면 절대 안 돼요."</p><span>최 과장</span></div>
+    </div>
+    <table style="font-size:14px">
+      <tr><th>질문</th><th>확인한 답</th><th>반영</th></tr>
+      <tr><td>파손은 언제까지 확인해야?</td><td>"관리자가 <b>30분 안</b>에는 확인해야 해요." 실제로는 1시간 걸린 적 있음 (장 씨)</td><td><b>30분 초과 표시</b></td></tr>
+      <tr><td>누가 처리하나?</td><td>근무 중인 관리자가 처리. "누가 확인했는지는 남겨야" (관리자 김)</td><td>확인자·시각 기록</td></tr>
+      <tr><td>지침서와 계약서가 다르면?</td><td>정해진 기준 없음. "바로 판단하지 않고 센터장이나 화주사에 확인" (최 과장)</td><td><b>AI가 판단 않고 확인 경고</b></td></tr>
+      <tr><td>가장 자주 찾는 내용은?</td><td>파손 처리 방법, 냉장 보관 온도, 출고 순서 (최 과장)</td><td>빠른 질문 버튼 3개</td></tr>
+      <tr><td>개정 내용은 누가 알아야?</td><td>작업 방법·보관 조건이면 "작업자도 알아야" (관리자 김)</td><td>작업자 개정 알림</td></tr>
+      <tr><td>화주사에 무엇을 보여 주나?</td><td>자기 재고는 보여도 됨. 다른 화주사 물건·계약 내용은 절대 안 됨 (최 과장)</td><td>화주사 격리 · 내부 지침 숨김</td></tr>
+      <tr><td>통보 기한이 정해져 있나?</td><td>화주사별로 확인 필요, 지금 답할 수 없음 (최 과장)</td><td class="todo">미확인 → 지침서 근거로만 안내</td></tr>
+    </table>
+  </div>
+  <div class="foot"><span>질문 원문과 답 전체: 고객 인터뷰 기록(docs/인터뷰기록.md)</span><span>4</span></div>
+</section>
+
+<!-- 4b 인터뷰 두 번으로 달라진 것 -->
+<section class="slide">
+  <div class="kicker">인터뷰 두 번으로 달라진 것</div>
+  <h2 style="font-size:32px;margin-bottom:14px">1차에서 요구를 듣고 만들고, 2차에서 다시 물어 보강했습니다</h2>
+  <div style="display:flex;gap:8px;align-items:center;font-size:14px;margin-bottom:14px;flex-wrap:wrap">
+    <span class="tag t-acc" style="margin:0">① 1차 미팅 · 11문항</span><span style="color:var(--mute)">→</span>
+    <span class="tag t-cold" style="margin:0">② 1차 반영 개발</span><span style="color:var(--mute)">→</span>
+    <span class="tag t-acc" style="margin:0">③ 2차 미팅 · 13문항 (1차의 "모름·미정"만 다시 질문)</span><span style="color:var(--mute)">→</span>
+    <span class="tag t-bad" style="margin:0">④ 2차 보강 개발</span>
+  </div>
+  <table style="font-size:13.5px">
+    <tr><th style="width:15%">주제</th><th style="width:24%">① 1차에서 고객이 요구한 것</th><th style="width:19%">② 1차 뒤 만든 것</th><th style="width:22%">③ 2차에서 확인한 말</th><th>④ 2차 뒤 보강한 것</th></tr>
+    <tr><td><b>파손 확인</b></td><td>"관리자가 <b>30분 안</b>에는 확인해야 해요" (장 씨)</td><td>30분 넘으면 빨간 표시</td><td>"30분 안에 못 보면 <b>센터장님께</b> 알려야" (관리자 김)</td><td><b>센터장 화면에 🔔 알림</b></td></tr>
+    <tr><td><b>파손 기록</b></td><td>"사진·보고가 단체방에만 남아 <b>나중에 찾기 어렵다</b>" (센터장)</td><td>사진 첨부(선택) · 확인자 기록</td><td>"<b>사진·발견 시각·어떤 물건인지</b>는 꼭 필요" (센터장)</td><td><b>사진·물건 필수, 발견 시각 자동</b> = 책임 판단 증거</td></tr>
+    <tr><td><b>화주사 통보</b></td><td>통보 기한은 "확인해 봐야" (최 과장)</td><td>지침서 근거만 안내</td><td>"알렸다는 사실과 시각은 남겨야" · 기한 없으면 "기본값 없음" (최 과장)</td><td><b>통보 시각 기록</b>, 기한은 지침서에 있을 때만</td></tr>
+    <tr><td><b>화주사 화면</b></td><td>"다른 화주사 물건·계약 내용은 <b>절대</b> 안 돼요" (최 과장)</td><td>화주사 격리 · 자기 재고만</td><td>위치·처리 메모는 "<b>아직 정해 두지 않았습니다</b>" (최 과장)</td><td><b>위치·메모 비공개</b> <span style="color:var(--bad)">(권한 구멍 발견·수정)</span></td></tr>
+    <tr><td><b>규칙 개정</b></td><td>"현장 업무면 <b>작업자도 알아야</b>" (관리자 김)</td><td>작업자 화면에 개정 표시</td><td>"표시만으론 확인했는지 모름, <b>너무 잦으면 번거롭다</b>" (관리자 김)</td><td><b>판당 1회 "읽었습니다"</b> + 관리자 읽음 현황</td></tr>
+    <tr><td><b>문서 충돌</b></td><td>우선 기준 없음, "센터장이나 화주사에 확인" (최 과장)</td><td>AI는 판단 않고 경고</td><td>"<b>화주사와 확인</b>해서 정함, 자체 결정 불가" (센터장)</td><td>AI 경고 문구를 <b>"화주사와 확인 필요"</b>로</td></tr>
+  </table>
+  <div style="margin-top:auto;display:grid;grid-template-columns:1.25fr 1fr;gap:16px">
+    <div class="card" style="background:var(--accent-soft);border-color:#f3c9a6;padding:14px 18px"><p style="font-size:17px;color:var(--ink)"><b>고객이 "정해진 기준이 없다"고 한 곳은, 시스템이 대신 정하지 않습니다.</b></p></div>
+    <div class="card" style="padding:12px 16px"><p style="font-size:13.5px"><b style="color:var(--ink)">2차에도 남은 미확인 3</b> · 운송장·차량번호를 남길지 · 작업자 사용 언어 · 휴대폰·장갑 사용성 → <b style="color:var(--ink)">현장 시범</b></p></div>
+  </div>
+  <div class="foot"><span>근거: 인터뷰기록.md(1차) · 인터뷰기록_2차.md · 요구사항정의서 4·4-2절</span><span>5</span></div>
+</section>
+
+<!-- 5 오늘 만든 것 / 미룬 것 -->
+<section class="slide">
+  <div class="kicker">범위</div>
+  <h2>오늘 만든 것 5가지 + 인터뷰 반영 8가지, 미룬 것</h2>
+  <div class="grid g2">
+    <div class="card" style="background:#fff">
+      <span class="tag t-ok">오늘 만든 것</span>
+      <ul class="dots">
+        <li><b>입고 작업지시 + 수량 차이 표시</b> (휴대폰에서 실제 수량 입력)</li>
+        <li><b>파손 즉시 보고</b> (사진 → 관리자 배지 → 확인)</li>
+        <li><b>화주사별 문서 근거 Q&A</b> (문서명·판·조항 표시)</li>
+        <li><b>지침서 개정 업로드</b> (바뀐 조항 자동 표시)</li>
+        <li><b>4가지 역할 권한</b> (화주사는 자기 재고만)</li>
+        <li><b>1차 인터뷰 반영</b> 파손 30분 확인 기준 · 충돌 경고 · 작업자 개정 알림 · 자주 찾는 질문 버튼</li>
+        <li><b>2차 인터뷰 반영</b> 센터장 알림 · 파손 사진·품목 필수 · 개정 읽음 확인(판당 1회) · 화주사 비공개 항목</li>
+      </ul>
+    </div>
+    <div class="card">
+      <span class="tag t-acc">미룬 것</span>
+      <table>
+        <tr><td><b>월말 보관료 계산</b></td><td>입고·재고 기록이 먼저 쌓여야 계산 근거가 생김</td></tr>
+        <tr><td><b>출고 FIFO/유통기한순 배정</b></td><td>입고 정확도가 선행 조건</td></tr>
+        <tr><td><b>유통기한 임박·온도 기록</b></td><td>알림 채널을 고객과 정해야 함</td></tr>
+        <tr><td><b>다국어 작업지시</b></td><td>작업자 언어 확인 후 다음 단계</td></tr>
+        <tr><td><b>PDF 원본 파싱</b></td><td>오늘은 텍스트 변환본으로 검증</td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="foot"><span>기준: 고객이 매일 겪는 장면을 먼저, 월말 업무는 다음</span><span>6</span></div>
+</section>
+
+<!-- 6 화면 흐름 -->
+<section class="slide">
+  <div class="kicker">화면 흐름</div>
+  <h2>한 건의 입고가 세 사람의 화면을 지나갑니다</h2>
+  <div class="lane"><div class="who">작업자<br><span style="font-weight:500;font-size:13px;color:var(--mute)">휴대폰</span></div>
+    <div><span class="pill">내 작업 목록</span><span class="pill">실제 수량 입력 · 완료</span><span class="pill hot">파손 보고 (사진)</span><span class="pill">지침 질문</span></div></div>
+  <div class="lane"><div class="who">관리자·센터장<br><span style="font-weight:500;font-size:13px;color:var(--mute)">PC</span></div>
+    <div><span class="pill">입고 예정 등록 · 배정</span><span class="pill hot">수량 차이 목록</span><span class="pill hot">미확인 파손 배지 · 확인</span><span class="pill">문서 업로드 · 개정 비교</span><span class="pill">근거 Q&A</span></div></div>
+  <div class="lane"><div class="who">화주사 담당자<br><span style="font-weight:500;font-size:13px;color:var(--mute)">PC·휴대폰</span></div>
+    <div><span class="pill">내 재고</span><span class="pill">내 입고 내역 · 차이</span><span class="pill">다른 화주사 데이터는 보이지 않음</span></div></div>
+  <div class="flow" style="margin-top:auto">
+    <div class="step"><b>① 관리자</b><p>입고 예정 등록</p></div><div class="arr">→</div>
+    <div class="step"><b>② 작업자</b><p>실제 수량 입력·완료</p></div><div class="arr">→</div>
+    <div class="step"><b>③ 시스템</b><p>차이 표시·재고 생성</p></div><div class="arr">→</div>
+    <div class="step"><b>④ 화주사</b><p>내 재고로 확인</p></div>
+  </div>
+  <div class="foot"><span>기능 명세서 · 화면 목록</span><span>7</span></div>
+</section>
+
+<!-- 7 데이터·규칙·권한 -->
+<section class="slide">
+  <div class="kicker">데이터 · 규칙 · 권한</div>
+  <h2>규칙은 화면이 아니라 서버가 지킵니다</h2>
+  <div class="grid g3">
+    <div class="card"><h3>데이터 9개 테이블</h3>
+      <p>화주사 · 사용자 · 세션 · 품목 · 입고 작업지시 · 재고 로트 · 파손 보고 · 문서 · 조항</p>
+      <p style="margin-top:10px">수량 차이는 <b>저장하지 않고 계산</b>합니다. 예정·실제만 남겨 두 값이 어긋날 일이 없습니다.</p></div>
+    <div class="card"><h3>규칙과 지키는 곳</h3>
+      <table>
+        <tr><td>실제 수량 없이 완료 불가</td><td><b>API</b></td></tr>
+        <tr><td>0 미만 수량 거절</td><td><b>API</b></td></tr>
+        <tr><td>화주사 문서는 현행 1개</td><td><b>API 트랜잭션</b></td></tr>
+        <tr><td>Q&A는 그 화주사 현행 문서만</td><td><b>API</b></td></tr>
+      </table></div>
+    <div class="card"><h3>권한 4가지</h3>
+      <table>
+        <tr><td><b>센터장</b></td><td>전체</td></tr>
+        <tr><td><b>관리자</b></td><td>입고·파손 확인·문서</td></tr>
+        <tr><td><b>작업자</b></td><td>내 작업·파손 보고·질문</td></tr>
+        <tr><td><b>화주사</b></td><td>자기 재고만, 남의 것 요청 시 403</td></tr>
+      </table></div>
+  </div>
+  <div class="foot"><span>ERD와 API 목록: 기능 명세서</span><span>8</span></div>
+</section>
+
+<!-- 8 AI 역할 -->
+<section class="slide">
+  <div class="kicker">AI의 역할</div>
+  <h2>AI는 찾고 정리합니다. 판단과 승인은 사람이 합니다</h2>
+  <div class="grid g2">
+    <div class="card" style="background:var(--ok-soft);border-color:#bfe3d0">
+      <span class="tag t-ok" style="background:#fff">AI가 하는 일</span>
+      <ul class="dots">
+        <li>고른 화주사의 <b>현행 지침서·계약서에서만</b> 찾아 답하고, 문서명·판·조항을 함께 보여 줍니다</li>
+        <li>파손 보고가 들어오면 그 화주사의 <b>파손 처리 조항을 자동으로 붙입니다</b></li>
+        <li>개정판을 올리면 바뀐 조항을 <b>쉬운 문장으로 요약</b>합니다</li>
+      </ul>
+    </div>
+    <div class="card" style="background:var(--bad-soft);border-color:#f0c9c4">
+      <span class="tag t-bad" style="background:#fff">AI가 하지 않는 일</span>
+      <ul class="dots">
+        <li>자료에 없는 내용은 지어내지 않고 <b>"자료에 없음"</b>이라고 답합니다</li>
+        <li>파손 책임이 누구에게 있는지는 <b>판정하지 않습니다</b>. 근거만 보여 주고 관리자가 판단합니다</li>
+        <li>지침서와 계약서가 다르면 고르지 않고 <b>"화주사와 확인이 필요합니다"</b>로 안내합니다. 센터가 자체로 최종 결정할 수 없기 때문입니다(센터장)</li>
+        <li>반송·격리를 실행하거나 화주사에 연락하지 않습니다. 확인 버튼은 관리자가 누릅니다</li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot"><span>OpenAI 임베딩 + 답변 모델 · 키는 서버 환경변수에만</span><span>9</span></div>
+</section>
+
+<!-- 9 시연 순서 -->
+<section class="slide">
+  <div class="kicker">시연 · 4분</div>
+  <h2>입력부터 결과 저장까지</h2>
+  <ul class="demo">
+    <li><span class="timer">0:00</span><span><b>관리자 choi</b> 로그인 → 빨간 카드 <b>"30분 넘게 확인 안 된 파손 1" · "화주사 통보 기한 지난 파손 1"</b> — 2시간 반 전 단체방에 묻힌 그 젖은 우유 박스</span></li>
+    <li><span class="timer">0:30</span><span><b>관리자</b> 파손함 열기 → 사진·처리 3단계·근거 조항 + <b>통보 마감 지남</b>(FRESH 제4조 2시간) → 확인 + "화주사에 통보함" 체크 → 시각 기록</span></li>
+    <li><span class="timer">1:00</span><span><b>작업자 jang(휴대폰)</b> 내 작업 → 실제 수량 비우고 완료 → <b>서버가 거절</b> → 적은 수량 입력 → <b>차이 표시</b></span></li>
+    <li><span class="timer">1:30</span><span><b>작업자</b> FRESH 박스 "파손 있음" → <b>사진(필수)</b> 첨부 → <b>관리자에게 바로 보고</b> → 처리 방법·근거와 <b>통보까지 남은 시간</b>이 바로 뜸</span></li>
+    <li><span class="timer">2:00</span><span><b>Q&A</b> 빠른 질문 버튼 → FRESH와 BEAUTY의 다른 답·다른 근거 → 자료에 없는 질문은 "근거 없음"</span></li>
+    <li><span class="timer">2:40</span><span><b>개정</b> FROZEN 지침서 제2판 업로드 → 바뀐 조항 표시 → 같은 질문의 답이 24시간에서 <b>6시간</b>으로</span></li>
+    <li><span class="timer">3:10</span><span><b>작업자 jang</b> 다시 로그인 → <b>최근 개정 알림</b>(FROZEN 제2판)</span></li>
+    <li><span class="timer">3:30</span><span><b>화주사</b> FRESH 담당자 → 자기 재고만 보임, 센터 내부 지침은 보이지 않음</span></li>
+  </ul>
+  <div class="foot"><span>배포 주소에서 시연 · hanbit-wms-web.onrender.com</span><span>10</span></div>
+</section>
+
+<!-- 10 테스트 결과 -->
+<section class="slide">
+  <div class="kicker">테스트 및 검수</div>
+  <h2>명세의 기능을 고객 상황에 가까운 자료로 확인했습니다</h2>
+  <div class="grid g4" style="flex:none;margin-bottom:24px">
+    <div class="card"><div class="num" id="t-total">54</div><p>시험 항목</p></div>
+    <div class="card"><div class="num" style="color:var(--ok)">50</div><p>통과</p></div>
+    <div class="card"><div class="num" style="color:var(--accent)">3</div><p>부분 통과 (시험 자료 한계 · 리허설 확인)</p></div>
+    <div class="card"><div class="num" style="color:var(--bad)">0</div><p>실패 · 미시험 1(리허설 확인) · 발견 문제 8건 모두 해결</p></div>
+  </div>
+  <table>
+    <tr><th>영역</th><th>대표 항목</th><th>결과</th></tr>
+    <tr><td><b>권한</b></td><td>FRESH 담당자가 BEAUTY 재고 API를 직접 호출하면 403</td><td>✅ 403 "다른 화주사의 정보는 볼 수 없습니다"</td></tr>
+    <tr><td><b>입고</b></td><td>실제 수량 없이 완료하면 API가 거절, 예정과 실제가 다르면 차이 표시</td><td>✅ 400 거절 · 예정 50·실제 48 → 차이 -2, 작업자·관리자 화면에 표시</td></tr>
+    <tr><td><b>파손</b></td><td>보고 즉시 관리자 배지, 그 화주사 지침 자동 첨부</td><td>✅ 파손함 배지 1 · 처리 3단계 + 근거 3개</td></tr>
+    <tr><td><b>Q&A</b></td><td>화주사별 근거로 답하고, 자료에 없는 질문은 지어내지 않음</td><td>✅ 시험질문 11개 → 1차 9/11, 검색 수정 뒤 11/11 · 자료에 없는 질문은 근거 없음</td></tr>
+    <tr><td><b>개정</b></td><td>제2판 업로드 뒤 현행 1개, 바뀐 조항 표시, 답이 6시간으로 바뀜</td><td>✅ 변경 3·추가 1·삭제 1 · 24시간 → 6시간</td></tr>
+  </table>
+  <div class="foot"><span>발견 문제 8건(배포·설정 3 · AI 답변·검색 3 · 권한 노출 1 · 화면 1) 모두 수정 · 전체 내역: 테스트 결과표</span><span>11</span></div>
+</section>
+
+<!-- 11 가산점 제안 -->
+<section class="slide">
+  <div class="kicker">고객이 말하지 않았지만 꼭 필요한 기능</div>
+  <h2 style="font-size:34px;margin-bottom:22px">고객도 모르던 "화주사 통보 기한", 보고 순간 시스템이 계산합니다</h2>
+  <div class="grid g2">
+    <div class="card">
+      <h3>발견 → 근거</h3>
+      <div class="flow" style="flex-direction:column;gap:8px">
+        <div class="step"><b>① 인터뷰</b><p>최 과장: "알리는 기한을 따로 정해 둔 곳이 있는지는 <b>바로 확인해 봐야</b> 해요" → 현장은 기한을 모름</p></div>
+        <div class="step"><b>② 지침서</b><p>그런데 기한은 문서에 있음: 신선마켓 <b>반송 결정 후 2시간</b>(제4조) · 루미코스메틱 <b>발견 당일</b> · 한겨울푸드 <b>24시간 → 6시간</b>(제2판)</p></div>
+        <div class="step" style="border-color:var(--accent);background:var(--accent-soft)"><b>③ 보관계약서 제6조 (3사 공통)</b><p>기한 안에 통보하지 않아 <b>늘어난 손해는 센터 부담</b> → 모르는 기한 때문에 센터가 돈을 물 수 있음</p></div>
+      </div>
+    </div>
+    <div class="card" style="background:#fff">
+      <h3>구현한 것</h3>
+      <ul class="dots">
+        <li>파손 보고 순간, 현행 지침서 파손 조항의 "N시간 안에·당일"을 <b>규칙으로 읽어</b> 통보 마감 시각을 계산 (AI 추정 아님)</li>
+        <li>파손함·작업자 화면에 <b>"남은 시간 / 지남"</b>과 근거 조항 표시</li>
+        <li>관리자가 <b>"화주사에 통보함"</b>을 체크하면 통보 시각이 기록으로 남음</li>
+        <li>관리자 요약에 <b>"통보 기한 지난 파손"</b> 카드</li>
+        <li>지침서가 개정되면 <b>다음 보고부터 새 기한(6시간) 자동 적용</b></li>
+      </ul>
+      <p style="margin-top:10px;font-size:15px">시험: FRESH 2시간 · BEAUTY 당일 23:59 · FROZEN 24시간 계산 ✅ · 통보 중복 기록 400 · 작업자 기록 403</p>
+    </div>
+  </div>
+  <div class="foot"><span>가산점 제안 · 실제 구현 · 함께 쓰는 근거: FRESH 보관계약서 제4조 "입고 검수 때 기록하지 않으면 센터 과실"</span><span>12</span></div>
+</section>
+
+<!-- 12 다음 단계 -->
+<section class="slide dark">
+  <div class="kicker">다음 단계</div>
+  <h2 style="color:#fff">입고가 정확해지면, 다음은 돈과 시간입니다</h2>
+  <div class="grid g3" style="flex:none">
+    <div><div class="num" style="color:#ffb27a">1</div><h3 style="color:#fff">파손 기록을 배상 증빙으로</h3><p>입고 검수 기록·사진·시각을 화주사별 증빙 묶음으로 내보내 계약서상 책임 다툼에 대비</p></div>
+    <div><div class="num" style="color:#ffb27a">2</div><h3 style="color:#fff">월말 보관료 계산</h3><p>구역(상온·냉장·냉동)과 보관 기간으로 화주사별 자동 산출</p></div>
+    <div><div class="num" style="color:#ffb27a">3</div><h3 style="color:#fff">출고 순서 · 임박 알림 · 다국어</h3><p>선입선출·유통기한순 배정, 유통기한 통보, 외국인 작업자용 작업지시</p></div>
+  </div>
+  <div style="margin-top:28px;border:1px solid #3a5b7c;border-radius:12px;padding:16px 20px">
+    <h3 style="color:#ffb27a;font-size:17px;margin-bottom:6px">남은 위험 · 현장 시범이 필요한 것</h3>
+    <p style="font-size:16px">작업자 휴대폰 사용: 냉동 구역에서 장갑을 낀 채 조작할 수 있는지, 창고 안 인터넷이 어느 구역까지 되는지는 <b style="color:#fff">확인해 본 적이 없습니다</b>(장 씨). 한 구역에서 1주 시범 운영 후 확대를 제안합니다. 한국어가 서툰 작업자 인원·언어도 아직 정리된 자료가 없습니다(센터장).</p>
+  </div>
+  <p style="margin-top:auto;font-size:24px;color:#fff">감사합니다. 질문 받겠습니다.</p>
+  <div class="foot"><span>github.com/hyliliana/hanbit-wms-lite · hanbit-wms-web.onrender.com</span><span>13</span></div>
+</section>
+
+</div>
+<div id="bar"></div>
+<div id="hud"></div>
+<script>
+(function(){
+  var slides=[].slice.call(document.querySelectorAll('.slide'));
+  var stage=document.getElementById('stage'),hud=document.getElementById('hud'),bar=document.getElementById('bar');
+  var i=0;
+  var h=parseInt((location.hash||'').replace('#',''),10); if(h>0&&h<=slides.length) i=h-1;
+  function fit(){var s=Math.min(innerWidth/1280,innerHeight/720);stage.style.transform='translate(-50%,-50%) scale('+s+')';}
+  function show(n){i=Math.max(0,Math.min(slides.length-1,n));slides.forEach(function(s,k){s.classList.toggle('on',k===i)});
+    hud.textContent=(i+1)+' / '+slides.length;bar.style.width=((i+1)/slides.length*100)+'%';history.replaceState(null,'','#'+(i+1));}
+  addEventListener('keydown',function(e){
+    if(['ArrowRight','PageDown',' ','Enter'].indexOf(e.key)>-1){e.preventDefault();show(i+1)}
+    else if(['ArrowLeft','PageUp','Backspace'].indexOf(e.key)>-1){e.preventDefault();show(i-1)}
+    else if(e.key==='Home')show(0);else if(e.key==='End')show(slides.length-1);
+    else if(e.key==='f'){document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen()}
+  });
+  addEventListener('click',function(e){ if(e.clientX>innerWidth/2) show(i+1); else show(i-1); });
+  addEventListener('resize',fit); fit(); show(i);
+})();
+</script>
+</body>
+</html>
