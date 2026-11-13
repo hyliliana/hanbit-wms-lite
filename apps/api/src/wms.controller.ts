@@ -20,6 +20,9 @@ import { AuthUser, Public, Roles, checkPassword, scopeShipper } from "./auth";
 const STAFF = ["ADMIN", "MANAGER", "WORKER"] as const;
 const OFFICE = ["ADMIN", "MANAGER"] as const;
 
+/** 인터뷰(장 씨): "파손 보고는 관리자가 30분 안에는 확인해야 해요" */
+const DAMAGE_SLA_MIN = 30;
+
 const int = (v: any) => (v === undefined || v === null || v === "" ? undefined : Number(v));
 
 @Controller()
@@ -203,12 +206,13 @@ export class WmsController {
   @Roles(...OFFICE)
   @Get("dashboard")
   async dashboard() {
-    const [unconfirmed, planned, doneWithDiff] = await Promise.all([
+    const [unconfirmed, overdue, planned, doneWithDiff] = await Promise.all([
       this.prisma.damageReport.count({ where: { status: "REPORTED" } }),
+      this.prisma.damageReport.count({ where: { status: "REPORTED", createdAt: { lt: new Date(Date.now() - DAMAGE_SLA_MIN * 60e3) } } }),
       this.prisma.workOrder.count({ where: { status: "PLANNED" } }),
       this.prisma.workOrder.findMany({ where: { status: "DONE" }, select: { expectedQty: true, actualQty: true } }),
     ]);
-    return { unconfirmedDamages: unconfirmed, plannedOrders: planned, qtyMismatches: doneWithDiff.filter((w) => w.actualQty !== w.expectedQty).length };
+    return { unconfirmedDamages: unconfirmed, overdueDamages: overdue, damageSlaMinutes: DAMAGE_SLA_MIN, plannedOrders: planned, qtyMismatches: doneWithDiff.filter((w) => w.actualQty !== w.expectedQty).length };
   }
 
   // ───────── 문서 (지침서·계약서) ─────────
@@ -269,6 +273,18 @@ export class WmsController {
         select: { id: true, title: true, version: true, kind: true, changeSummary: true },
       });
     }, { timeout: 30000 });
+  }
+
+  /** 최근 개정된 문서 (작업자 화면 알림용) — 인터뷰(관리자 김): 현장 관련 변경은 작업자도 알아야 함 */
+  @Roles(...STAFF)
+  @Get("documents-recent-changes")
+  async recentChanges() {
+    const docs = await this.prisma.document.findMany({
+      where: { isCurrent: true, version: { gt: 1 }, createdAt: { gt: new Date(Date.now() - 14 * 86400e3) } },
+      include: { shipper: true },
+      orderBy: { createdAt: "desc" },
+    });
+    return docs.map((d) => ({ id: d.id, shipper: d.shipper.name, title: d.title, version: d.version, kind: d.kind, createdAt: d.createdAt, summary: (d.changeSummary as any)?.summary ?? null }));
   }
 
   // ───────── 근거 Q&A ─────────

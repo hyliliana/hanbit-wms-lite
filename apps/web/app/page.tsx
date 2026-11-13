@@ -27,6 +27,7 @@ function useApi(token: string | null, onExpired: () => void) {
 type Api = ReturnType<typeof useApi>;
 
 const fmtDate = (d?: string | null) => (d ? new Date(d).toLocaleDateString("ko-KR", { month: "short", day: "numeric" }) : "-");
+const minsSince = (a: string, b?: string | null) => Math.max(0, Math.round(((b ? new Date(b).getTime() : Date.now()) - new Date(a).getTime()) / 60000));
 const fmtTime = (d?: string | null) => (d ? new Date(d).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "-");
 
 export default function Home() {
@@ -127,6 +128,12 @@ function AskBox({ api, shippers }: { api: Api; shippers: any[] }) {
         <option value="">화주사를 고르세요</option>
         {shippers.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.code})</option>)}
       </select>
+      <label>자주 찾는 질문</label>
+      <div className="row">
+        {["파손된 박스가 입고되면 어떻게 처리하나요?", "보관 온도 범위가 어떻게 되나요?", "출고할 때 어떤 순서로 내보내나요?"].map((t) => (
+          <button key={t} className="btn ghost" style={{ padding: "6px 10px", fontSize: 13 }} onClick={() => setQ(t)}>{t.replace(/[?]/, "")}</button>
+        ))}
+      </div>
       <label>질문</label>
       <textarea value={q} onChange={(e) => setQ(e.target.value)} placeholder="예: 박스가 젖은 채로 입고됐어요. 어떻게 해야 하나요?" />
       <div style={{ marginTop: 8 }}><button className="btn" disabled={!sid || !q.trim() || busy} onClick={ask}>{busy ? "찾는 중..." : "질문하기"}</button></div>
@@ -167,9 +174,11 @@ function Worker({ api, user }: { api: Api; user: User }) {
   const [err, setErr] = useState("");
   const [qty, setQty] = useState<Record<number, string>>({});
   const [damageFor, setDamageFor] = useState<any>(null);
+  const [changes, setChanges] = useState<any[]>([]);
 
   const load = useCallback(async () => {
     try {
+      api("/documents-recent-changes").then(setChanges).catch(() => {});
       setOrders(await api("/work-orders"));
       setShippers(await api("/shippers"));
     } catch (e: any) { setErr(e.message); }
@@ -200,6 +209,12 @@ function Worker({ api, user }: { api: Api; user: User }) {
 
       {tab === "tasks" && (
         <>
+          {changes.map((c) => (
+            <div className="card" key={c.id} style={{ borderColor: "var(--warn)", background: "var(--warn-bg)" }}>
+              <b>📢 {c.shipper} {c.kind === "GUIDE" ? "지침서" : "계약서"} 제{c.version}판으로 바뀌었습니다</b>
+              {c.summary && <div style={{ whiteSpace: "pre-wrap", marginTop: 6, fontSize: 14 }}>{c.summary}</div>}
+            </div>
+          ))}
           {planned.length === 0 && <div className="card muted">남은 입고 작업이 없습니다.</div>}
           {planned.map((w) => (
             <div className="task" key={w.id}>
@@ -324,6 +339,7 @@ function Manager({ api, user }: { api: Api; user: User }) {
       {tab === "home" && !dash && <div className="card muted">현황을 불러오는 중...</div>}
       {tab === "home" && dash && (
         <div className="grid">
+          <div className="card" onClick={() => setTab("damage")} style={{ cursor: "pointer", borderColor: dash.overdueDamages ? "var(--bad)" : undefined }}><div className="muted">{dash.damageSlaMinutes}분 넘게 확인 안 된 파손</div><div className="stat" style={{ color: dash.overdueDamages ? "var(--bad)" : "var(--ok)" }}>{dash.overdueDamages}</div><div className="muted">현장 기준: 관리자가 {dash.damageSlaMinutes}분 안에 확인</div></div>
           <div className="card" onClick={() => setTab("damage")} style={{ cursor: "pointer" }}><div className="muted">미확인 파손 보고</div><div className="stat" style={{ color: dash.unconfirmedDamages ? "var(--bad)" : undefined }}>{dash.unconfirmedDamages}</div></div>
           <div className="card" onClick={() => setTab("inbound")} style={{ cursor: "pointer" }}><div className="muted">수량 차이 입고</div><div className="stat" style={{ color: dash.qtyMismatches ? "var(--bad)" : undefined }}>{dash.qtyMismatches}</div></div>
           <div className="card" onClick={() => setTab("inbound")} style={{ cursor: "pointer" }}><div className="muted">대기 중 입고 작업</div><div className="stat">{dash.plannedOrders}</div></div>
@@ -355,7 +371,11 @@ function DamageInbox({ api, onChange }: { api: Api; onChange: () => void }) {
       {list.map((d) => (
         <div className="card" key={d.id} style={d.status === "REPORTED" ? { borderColor: "var(--bad)" } : undefined}>
           <div className="row">
-            {d.status === "REPORTED" ? <span className="chip bad">미확인</span> : <span className="chip ok">확인됨</span>}
+            {d.status === "REPORTED" ? (
+              <><span className="chip bad">미확인</span><span className={`chip ${minsSince(d.createdAt) >= 30 ? "bad" : "warn"}`}>보고 후 {minsSince(d.createdAt)}분{minsSince(d.createdAt) >= 30 ? " · 30분 초과" : ""}</span></>
+            ) : (
+              <><span className="chip ok">확인됨</span><span className={`chip ${minsSince(d.createdAt, d.confirmedAt) > 30 ? "bad" : "ok"}`}>확인까지 {minsSince(d.createdAt, d.confirmedAt)}분</span></>
+            )}
             <b>{d.shipper.name}</b><span className="muted">{d.item?.name ?? "품목 미지정"} · {d.qty}박스 · {d.reporter.name} · {fmtTime(d.createdAt)}</span>
           </div>
           <p style={{ margin: "8px 0" }}>{d.description}</p>
