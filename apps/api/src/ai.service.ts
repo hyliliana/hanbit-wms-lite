@@ -24,6 +24,21 @@ export function splitSections(content: string): Section[] {
   return out.map((s) => ({ ...s, text: s.text.trim() })).filter((s) => s.text);
 }
 
+/** 현장 말 → 지침서 용어 (검색어 보강) */
+const TERMS: [RegExp, string][] = [
+  [/깨|찢|젖|눌|찌그러|새|누액|오염|망가|부서|터/, "파손 입고 시 처리 파손 책임"],
+  [/모자라|부족|덜 왔|더 왔|많이 왔|적게|빠졌|수량|박스 왔|개 왔|예정/, "수량 차이 처리 예정 수량 실제 수량 통보"],
+  [/온도|몇 도|℃|냉장|냉동|녹/, "보관 온도와 구역"],
+  [/순서|먼저|선입|유통기한 순|출고/, "출고 순서"],
+  [/배상|책임|누구 잘못|물어/, "파손 책임 범위 배상"],
+  [/연락|누구에게|담당|전화/, "연락 체계 통보"],
+  [/사진|찍/, "사진 기준"],
+];
+export function expandQuery(q: string) {
+  const extra = TERMS.filter(([re]) => re.test(q)).map(([, t]) => t);
+  return extra.length ? `${q}\n(관련 조항: ${extra.join(", ")})` : q;
+}
+
 function cosine(a: number[], b: number[]) {
   let d = 0, na = 0, nb = 0;
   for (let i = 0; i < a.length; i++) { d += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
@@ -91,9 +106,10 @@ export class AiService {
       include: { document: true },
     });
     if (!chunks.length) return [];
-    const [qe] = await this.embed([question]);
+    const expanded = expandQuery(question);
+    const [qe] = await this.embed([expanded]);
     const scored = chunks.map((c) => {
-      const kw = keywordScore(question, c.section + " " + c.text);
+      const kw = keywordScore(expanded, c.section + " " + c.text);
       const sem = qe.length && c.embedding.length ? cosine(qe, c.embedding) : 0;
       return {
         documentId: c.documentId,
@@ -106,8 +122,10 @@ export class AiService {
       };
     });
     scored.sort((a, b) => b.score - a.score);
-    const min = qe.length ? 0.25 : 0.2;
-    return scored.filter((s) => s.score >= min).slice(0, k);
+    // 절대 기준점 하나로 자르지 않고 상위 조항을 넘긴다. 관련 없으면 답변 단계에서 '근거 없음'으로 처리
+    const top = scored[0]?.score ?? 0;
+    const min = qe.length ? Math.max(0.2, top - 0.12) : 0.15;
+    return scored.filter((s) => s.score >= min).slice(0, Math.max(k, 5));
   }
 
   /** 근거 조항만으로 답한다. 근거가 없으면 없다고 말한다 */
