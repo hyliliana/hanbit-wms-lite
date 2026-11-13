@@ -275,7 +275,6 @@ export class WmsController {
     }, { timeout: 30000 });
   }
 
-  /** 최근 개정된 문서 (작업자 화면 알림용) — 인터뷰(관리자 김): 현장 관련 변경은 작업자도 알아야 함 */
   /** 작업지시 카드의 화주사 주의사항: 현행 지침서의 입고·검수·수량·온도·파손 조항 원문 (AI 가공 없음) · 인터뷰(장 씨): 작업 순서·주의할 점이 헷갈림 */
   @Roles(...STAFF)
   @Get("shippers/:id/cautions")
@@ -289,6 +288,7 @@ export class WmsController {
     return { title: doc.title, version: doc.version, items };
   }
 
+  /** 최근 개정된 문서 (작업자 화면 알림용) — 인터뷰(관리자 김): 현장 관련 변경은 작업자도 알아야 함 */
   @Roles(...STAFF)
   @Get("documents-recent-changes")
   async recentChanges() {
