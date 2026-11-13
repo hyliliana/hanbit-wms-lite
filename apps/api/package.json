@@ -6,7 +6,7 @@
     "build": "nest build",
     "start:prod": "prisma db push --skip-generate && node dist/main",
     "db:push": "prisma db push",
-    "db:sample": "tsx prisma/sample.ts",
+    "db:sample": "tsx --env-file=.env prisma/sample.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {
