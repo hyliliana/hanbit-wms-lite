@@ -177,11 +177,14 @@ export class WmsController {
     const where: any = { shipperId };
     if (status === "REPORTED" || status === "CONFIRMED") where.status = status;
     if (u.role === "WORKER") where.reporterId = u.id;
-    return this.prisma.damageReport.findMany({
+    const rows = await this.prisma.damageReport.findMany({
       where,
       include: { shipper: true, item: true, reporter: { select: { name: true } }, confirmedBy: { select: { name: true } } },
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],
     });
+    // 화주사에게는 센터 내부 처리 지침(AI 첨부·근거 원문)을 내려보내지 않는다
+    if (u.role === "SHIPPER") return rows.map(({ aiGuidance, aiCitations, ...r }) => r);
+    return rows;
   }
 
   @Roles(...OFFICE)
