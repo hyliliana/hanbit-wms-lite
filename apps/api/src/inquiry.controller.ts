@@ -69,7 +69,7 @@ export class InquiryController {
   @Post("inquiries/:id/answer")
   async answer(@Req() req: any, @Param("id", ParseIntPipe) id: number, @Body() b: any) {
     const r = await this.mine(id);
-    if (r.status === "DONE") throw new BadRequestException("이미 답을 전달했습니다");
+    if (r.status !== "NEW") throw new BadRequestException(r.status === "DONE" ? "이미 답을 전달했습니다" : "화주사 문의가 진행 중입니다. 화주사 답을 받아 작업자에게 전달하세요");
     const a = String(b?.answer ?? "").trim();
     if (!a) throw new BadRequestException("답변을 입력하세요");
     return this.prisma.inquiry.update({ where: { id }, data: { status: "DONE", source: "MANAGER", finalAnswer: a, handlerId: req.user.id, deliveredAt: new Date() } });
@@ -80,7 +80,7 @@ export class InquiryController {
   @Post("inquiries/:id/ask-shipper")
   async askShipper(@Req() req: any, @Param("id", ParseIntPipe) id: number, @Body() b: any) {
     const r = await this.mine(id);
-    if (r.status === "DONE") throw new BadRequestException("이미 답을 전달했습니다");
+    if (r.status !== "NEW") throw new BadRequestException("이미 처리 중이거나 끝난 질문입니다");
     const m = String(b?.message ?? "").trim();
     if (!m) throw new BadRequestException("화주사에 보낼 문의 내용을 입력하세요");
     return this.prisma.inquiry.update({ where: { id }, data: { status: "ASKED_SHIPPER", shipperQuestion: m, shipperAskedAt: new Date(), handlerId: req.user.id } });
@@ -91,16 +91,18 @@ export class InquiryController {
   @Post("inquiries/:id/external")
   async external(@Req() req: any, @Param("id", ParseIntPipe) id: number, @Body() b: any) {
     const r = await this.mine(id);
-    if (r.status === "DONE") throw new BadRequestException("이미 답을 전달했습니다");
+    if (r.status !== "NEW" && r.status !== "ASKED_SHIPPER") throw new BadRequestException("화주사 답이 이미 도착했거나 끝난 질문입니다");
     const content = String(b?.content ?? "").trim();
     const method = String(b?.method ?? "").trim();
     if (!content || !method) throw new BadRequestException("확인 방법과 내용을 입력하세요");
     const date = b?.date ? new Date(b.date) : new Date();
     if (isNaN(date.getTime())) throw new BadRequestException("확인 날짜가 올바르지 않습니다");
-    return this.prisma.inquiry.update({
-      where: { id },
+    const ok = await this.prisma.inquiry.updateMany({
+      where: { id, status: { in: ["NEW", "ASKED_SHIPPER"] } },
       data: { status: "SHIPPER_REPLIED", source: "EXTERNAL", externalMethod: method, shipperAnswer: content, shipperAnsweredAt: date, confirmedDate: date, handlerId: req.user.id },
     });
+    if (!ok.count) throw new BadRequestException("화주사 답이 이미 도착했거나 끝난 질문입니다");
+    return this.mine(id);
   }
 
   /** [작업자에게 전달] 화주사 답(또는 관리자가 다듬은 답)을 작업자에게 */
@@ -109,7 +111,7 @@ export class InquiryController {
   async deliver(@Req() req: any, @Param("id", ParseIntPipe) id: number, @Body() b: any) {
     const r = await this.mine(id);
     if (r.status !== "SHIPPER_REPLIED") throw new BadRequestException("화주사 답이 도착한 뒤에 전달할 수 있습니다");
-    const a = String(b?.answer ?? r.shipperAnswer ?? "").trim();
+    const a = (String(b?.answer ?? "").trim() || String(r.shipperAnswer ?? "").trim());
     if (!a) throw new BadRequestException("전달할 답을 입력하세요");
     return this.prisma.inquiry.update({ where: { id }, data: { status: "DONE", finalAnswer: a, deliveredAt: new Date(), handlerId: req.user.id } });
   }
@@ -165,11 +167,12 @@ export class InquiryController {
   async shipperReply(@Req() req: any, @Param("id", ParseIntPipe) id: number, @Body() b: any) {
     const r = await this.mine(id);
     if (r.shipperId !== req.user.shipperId || !r.shipperQuestion) throw new ForbiddenException("이 문의에 답할 권한이 없습니다");
-    if (r.status !== "ASKED_SHIPPER") throw new BadRequestException("이미 답한 문의입니다");
+    if (r.status !== "ASKED_SHIPPER") throw new BadRequestException(r.source === "EXTERNAL" ? "센터가 다른 방법으로 이미 확인한 문의입니다" : "이미 답한 문의입니다");
     const a = String(b?.answer ?? "").trim();
     if (!a) throw new BadRequestException("답을 입력하세요");
     const now = new Date();
-    await this.prisma.inquiry.update({ where: { id }, data: { status: "SHIPPER_REPLIED", source: "SHIPPER_APP", shipperAnswer: a, shipperAnsweredAt: now, confirmedDate: now } });
+    const ok = await this.prisma.inquiry.updateMany({ where: { id, status: "ASKED_SHIPPER" }, data: { status: "SHIPPER_REPLIED", source: "SHIPPER_APP", shipperAnswer: a, shipperAnsweredAt: now, confirmedDate: now } });
+    if (!ok.count) throw new BadRequestException("이미 답한 문의입니다");
     return { id, answer: a, answeredAt: now };
   }
 }

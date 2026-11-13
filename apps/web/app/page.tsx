@@ -28,6 +28,7 @@ type Api = ReturnType<typeof useApi>;
 
 const fmtDate = (d?: string | null) => (d ? new Date(d).toLocaleDateString("ko-KR", { month: "short", day: "numeric" }) : "-");
 const minsSince = (a: string, b?: string | null) => Math.max(0, Math.round(((b ? new Date(b).getTime() : Date.now()) - new Date(a).getTime()) / 60000));
+const todayLocal = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const fmtTime = (d?: string | null) => (d ? new Date(d).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "-");
 
 export default function Home() {
@@ -537,11 +538,11 @@ function InquiryInbox({ api, onChange }: { api: Api; onChange: () => void }) {
                 <div style={{ marginTop: 8 }}>
                   <div className="grid">
                     <div><label>확인 방법</label><select value={t(`m${q.id}`, "전화")} onChange={(e) => setT(`m${q.id}`, e.target.value)}><option>전화</option><option>메일</option><option>메신저</option><option>방문</option></select></div>
-                    <div><label>확인 날짜</label><input type="date" value={t(`d${q.id}`, new Date().toISOString().slice(0, 10))} onChange={(e) => setT(`d${q.id}`, e.target.value)} /></div>
+                    <div><label>확인 날짜</label><input type="date" value={t(`d${q.id}`, todayLocal())} onChange={(e) => setT(`d${q.id}`, e.target.value)} /></div>
                   </div>
                   <label>화주사가 알려 준 내용</label>
                   <textarea value={t(`e${q.id}`)} onChange={(e) => setT(`e${q.id}`, e.target.value)} />
-                  <button className="btn" onClick={() => act(`/inquiries/${q.id}/external`, { method: t(`m${q.id}`, "전화"), date: t(`d${q.id}`, new Date().toISOString().slice(0, 10)), content: t(`e${q.id}`) })}>외부 확인 기록</button>
+                  <button className="btn" onClick={() => act(`/inquiries/${q.id}/external`, { method: t(`m${q.id}`, "전화"), date: t(`d${q.id}`, todayLocal()), content: t(`e${q.id}`) })}>외부 확인 기록</button>
                 </div>
               )}
             </>

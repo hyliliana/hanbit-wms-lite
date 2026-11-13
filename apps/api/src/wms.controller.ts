@@ -171,6 +171,7 @@ export class WmsController {
       // 작업지시 카드에서 보고하면 그 입고 건(품목·로트·위치·예정 수량)을 자동 연결
       const wo = await this.prisma.workOrder.findUnique({ where: { id: woId } });
       if (!wo || wo.shipperId !== shipper.id) throw new BadRequestException("이 화주사의 입고 작업이 아닙니다");
+      if (u.role === "WORKER" && wo.assigneeId && wo.assigneeId !== u.id) throw new ForbiddenException("다른 작업자에게 배정된 작업입니다");
       itemId = wo.itemId;
     }
     if (itemId) {
@@ -319,15 +320,15 @@ export class WmsController {
       changeSummary = { fromVersion: prev.version, ...d, summary: await this.ai.summarizeDiff(d) };
     }
     const embeds = await this.ai.embed(sections.map((s) => `${title} ${s.section}\n${s.text}`));
-    if (prev) {
-      // 인터뷰 3차: 지침서가 개정되면 전에 받은 답도 다시 봐야 한다
-      await this.prisma.centerAnswer.updateMany({
-        where: { shipperId },
-        data: { needsRecheck: true, recheckReason: `${kind === "GUIDE" ? "지침서" : "계약서"} 제${prev.version + 1}판 개정 후 재확인 필요` },
-      });
-    }
     return this.prisma.$transaction(async (tx) => {
       await tx.document.updateMany({ where: { shipperId, kind, isCurrent: true }, data: { isCurrent: false } });
+      if (prev) {
+        // 인터뷰 3차: 지침서가 개정되면 전에 받은 답도 다시 봐야 한다 (문서 저장과 같은 트랜잭션)
+        await tx.centerAnswer.updateMany({
+          where: { shipperId },
+          data: { needsRecheck: true, recheckReason: `${kind === "GUIDE" ? "지침서" : "계약서"} 제${prev.version + 1}판 개정 후 재확인 필요` },
+        });
+      }
       const version = (prev?.version ?? (await tx.document.count({ where: { shipperId, kind } }))) + 1;
       return tx.document.create({
         data: {
