@@ -107,14 +107,15 @@ function Login({ api, onLogin }: { api: Api; onLogin: (t: string, u: User) => vo
 }
 
 // ───────── 공통: 화주사 규칙 질문 ─────────
-function AskBox({ api, shippers }: { api: Api; shippers: any[] }) {
+function AskBox({ api, shippers, onAsked }: { api: Api; shippers: any[]; onAsked?: () => void }) {
   const [sid, setSid] = useState("");
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
   const [res, setRes] = useState<any>(null);
   const [err, setErr] = useState("");
+  const [sent, setSent] = useState(false);
   const ask = async () => {
-    setBusy(true); setErr(""); setRes(null);
+    setBusy(true); setErr(""); setRes(null); setSent(false);
     try { setRes(await api("/ask", { method: "POST", body: { shipperId: Number(sid), question: q } })); }
     catch (e: any) { setErr(e.message); }
     setBusy(false);
@@ -147,10 +148,75 @@ function AskBox({ api, shippers }: { api: Api; shippers: any[] }) {
               <div className="muted">{c.text}</div>
             </div>
           ))}
-          {!res.found && <p className="muted">근거가 없으면 답을 만들지 않습니다.</p>}
+          <CenterAnswers list={res.centerAnswers} />
+          {!res.found && (
+            <>
+              {res.nearby?.length > 0 && <p className="muted" style={{ marginTop: 10 }}>참고용 · 가장 가까운 조항 (이 질문의 답은 아닙니다)</p>}
+              {res.nearby?.map((c: any, i: number) => (
+                <div className="cite" key={i}><b>{c.title} · 제{c.version}판 · {c.section}</b><div className="muted">{c.text}</div></div>
+              ))}
+              {sent ? (
+                <div className="okmsg">관리자에게 확인 요청을 보냈습니다. 답이 오면 &lsquo;내 질문&rsquo;에서 볼 수 있습니다.</div>
+              ) : (
+                <div style={{ marginTop: 10 }}>
+                  <button className="btn big" onClick={async () => {
+                    try { await api("/inquiries", { method: "POST", body: { shipperId: res.shipperId, question: q } }); setSent(true); onAsked?.(); }
+                    catch (e: any) { setErr(e.message); }
+                  }}>관리자에게 확인 요청</button>
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
     </div>
+  );
+}
+
+/** 저장된 센터 답변 (지침서 근거와 구분해 표시) */
+function CenterAnswers({ list }: { list?: any[] }) {
+  if (!list?.length) return null;
+  return (
+    <>
+      {list.map((c) => (
+        <div className="ca" key={c.id}>
+          <div className="row">
+            <span className="chip">센터 답변</span>
+            {c.shipperConfirmed ? <span className="chip ok">화주사 확인 {fmtDate(c.confirmedDate)}</span> : <span className="chip">관리자 판단</span>}
+            {c.daysAgo !== null && <span className="muted">{c.daysAgo === 0 ? "오늘 확인" : `${c.daysAgo}일 전 확인`}</span>}
+            {c.needsRecheck && <span className="chip warn">{c.recheckReason ?? "지침 개정 후 재확인 필요"}</span>}
+          </div>
+          <div className="muted" style={{ marginTop: 4 }}>같은 질문: {c.question}</div>
+          <div style={{ marginTop: 4 }}>{c.answer}</div>
+        </div>
+      ))}
+    </>
+  );
+}
+
+/** 작업자: 내 질문 (대기 / 답변 완료) */
+function MyInquiries({ api }: { api: Api }) {
+  const [list, setList] = useState<any[]>([]);
+  useEffect(() => { const load = () => api("/inquiries").then(setList).catch(() => {}); load(); const t = setInterval(load, 10000); return () => clearInterval(t); }, [api]);
+  return (
+    <>
+      {list.length === 0 && <div className="card muted">관리자에게 확인 요청한 질문이 없습니다.</div>}
+      {list.map((q) => (
+        <div className="q" key={q.id}>
+          <div className="row">
+            {q.status === "DONE" ? <span className="chip ok">답변 완료</span> : <span className="chip warn">관리자 확인 중</span>}
+            <b>{q.shipper.name}</b><span className="muted">{fmtTime(q.createdAt)}</span>
+          </div>
+          <p style={{ margin: "6px 0" }}>{q.question}</p>
+          {q.status === "DONE" && (
+            <div className="answer">
+              {q.finalAnswer}
+              <div className="muted" style={{ marginTop: 4 }}>{q.source === "MANAGER" ? "관리자 답변" : `화주사 확인 ${fmtDate(q.confirmedDate)}`} · {fmtTime(q.deliveredAt)}</div>
+            </div>
+          )}
+        </div>
+      ))}
+    </>
   );
 }
 
@@ -167,7 +233,7 @@ function Citations({ list }: { list: any[] }) {
 
 // ───────── 작업자 (휴대폰) ─────────
 function Worker({ api, user }: { api: Api; user: User }) {
-  const [tab, setTab] = useState<"tasks" | "damage" | "ask">("tasks");
+  const [tab, setTab] = useState<"tasks" | "damage" | "ask" | "mine">("tasks");
   const [orders, setOrders] = useState<any[]>([]);
   const [shippers, setShippers] = useState<any[]>([]);
   const [msg, setMsg] = useState("");
@@ -203,6 +269,7 @@ function Worker({ api, user }: { api: Api; user: User }) {
         <button className={tab === "tasks" ? "on" : ""} onClick={() => setTab("tasks")}>내 작업 {planned.length}</button>
         <button className={tab === "damage" ? "on" : ""} onClick={() => { setDamageFor(null); setTab("damage"); }}>파손 보고</button>
         <button className={tab === "ask" ? "on" : ""} onClick={() => setTab("ask")}>규칙 질문</button>
+        <button className={tab === "mine" ? "on" : ""} onClick={() => setTab("mine")}>내 질문</button>
       </div>
       {msg && <div className="okmsg">{msg}</div>}
       {err && <div className="err">{err}</div>}
@@ -244,6 +311,7 @@ function Worker({ api, user }: { api: Api; user: User }) {
       )}
       {tab === "damage" && <DamageForm api={api} shippers={shippers} preset={damageFor} onDone={(m) => { setMsg(m); setTab("tasks"); load(); }} />}
       {tab === "ask" && <AskBox api={api} shippers={shippers} />}
+      {tab === "mine" && <MyInquiries api={api} />}
     </div>
   );
 }
@@ -289,6 +357,7 @@ function DamageForm({ api, shippers, preset, onDone }: { api: Api; shippers: any
   const [itemId, setItemId] = useState(preset ? String(preset.itemId) : "");
   const [qty, setQty] = useState("1");
   const [desc, setDesc] = useState("");
+  const [labelNo, setLabelNo] = useState("");
   const [photo, setPhoto] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -299,7 +368,7 @@ function DamageForm({ api, shippers, preset, onDone }: { api: Api; shippers: any
   const submit = async () => {
     setBusy(true); setErr("");
     try {
-      const r = await api("/damages", { method: "POST", body: { shipperId: Number(sid), itemId: itemId ? Number(itemId) : undefined, workOrderId: preset?.id, qty: Number(qty), description: desc, photo } });
+      const r = await api("/damages", { method: "POST", body: { shipperId: Number(sid), itemId: itemId ? Number(itemId) : undefined, workOrderId: preset?.id, qty: Number(qty), labelNo, description: desc, photo } });
       setResult(r);
     } catch (e: any) { setErr(e.message); }
     setBusy(false);
@@ -321,7 +390,12 @@ function DamageForm({ api, shippers, preset, onDone }: { api: Api; shippers: any
   return (
     <div className="card">
       <h2>파손 보고</h2>
-      {preset && <p className="muted">작업: {preset.item.name} · 로트 {preset.lotNo}</p>}
+      {preset && (
+        <div className="diffbox chg">
+          <b>이 입고 건에 자동 연결</b>
+          <div>{preset.item.name} · 로트 {preset.lotNo} · 위치 {preset.location} · 예정 {preset.expectedQty}개</div>
+        </div>
+      )}
       <label>화주사</label>
       <select value={sid} onChange={(e) => { setSid(e.target.value); setItemId(""); }}>
         <option value="">화주사를 고르세요</option>
@@ -332,6 +406,8 @@ function DamageForm({ api, shippers, preset, onDone }: { api: Api; shippers: any
         <option value="">품목을 고르세요</option>
         {items.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
       </select>
+      <label>박스 라벨/송장 번호 (선택)</label>
+      <input value={labelNo} onChange={(e) => setLabelNo(e.target.value)} placeholder="예: 송장 1234-5678 또는 박스 라벨 번호" />
       <label>파손 수량 (박스)</label>
       <input inputMode="numeric" value={qty} onChange={(e) => setQty(e.target.value.replace(/[^0-9]/g, ""))} />
       <label>어떤 파손인가요</label>
@@ -348,7 +424,7 @@ function DamageForm({ api, shippers, preset, onDone }: { api: Api; shippers: any
 
 // ───────── 관리자 ─────────
 function Manager({ api, user }: { api: Api; user: User }) {
-  const [tab, setTab] = useState<"home" | "inbound" | "damage" | "docs" | "ask" | "stock">("home");
+  const [tab, setTab] = useState<"home" | "inbound" | "damage" | "docs" | "ask" | "stock" | "inq">("home");
   const [dash, setDash] = useState<any>(null);
   const [shippers, setShippers] = useState<any[]>([]);
   const refresh = useCallback(() => { api("/dashboard").then(setDash).catch(() => {}); }, [api]);
@@ -362,6 +438,7 @@ function Manager({ api, user }: { api: Api; user: User }) {
         <button className={tab === "inbound" ? "on" : ""} onClick={() => setTab("inbound")}>입고·수량 차이{dash?.qtyMismatches ? <span className="badge">{dash.qtyMismatches}</span> : null}</button>
         <button className={tab === "stock" ? "on" : ""} onClick={() => setTab("stock")}>재고</button>
         <button className={tab === "docs" ? "on" : ""} onClick={() => setTab("docs")}>지침서·계약서</button>
+        <button className={tab === "inq" ? "on" : ""} onClick={() => setTab("inq")}>질문함{dash?.openInquiries ? <span className="badge">{dash.openInquiries}</span> : null}</button>
         <button className={tab === "ask" ? "on" : ""} onClick={() => setTab("ask")}>규칙 질문</button>
       </div>
       {dash?.overdueDamages > 0 && (
@@ -383,8 +460,130 @@ function Manager({ api, user }: { api: Api; user: User }) {
       {tab === "inbound" && <Inbound api={api} shippers={shippers} onChange={refresh} />}
       {tab === "stock" && <Stock api={api} shippers={shippers} />}
       {tab === "docs" && <Docs api={api} shippers={shippers} />}
-      {tab === "ask" && <AskBox api={api} shippers={shippers} />}
+      {tab === "ask" && <AskBox api={api} shippers={shippers} onAsked={refresh} />}
+      {tab === "inq" && <InquiryInbox api={api} onChange={refresh} />}
     </div>
+  );
+}
+
+const INQ_STATUS: Record<string, [string, string]> = {
+  NEW: ["새 질문", "bad"],
+  ASKED_SHIPPER: ["화주사 답 대기", "warn"],
+  SHIPPER_REPLIED: ["화주사 답 도착", "warn"],
+  DONE: ["전달 완료", "ok"],
+};
+
+/** 관리자 질문함: 작업자 → 관리자 → (화주사) → 관리자 → 작업자 */
+function InquiryInbox({ api, onChange }: { api: Api; onChange: () => void }) {
+  const [list, setList] = useState<any[]>([]);
+  const [cas, setCas] = useState<any[]>([]);
+  const [mode, setMode] = useState<Record<number, string>>({});
+  const [txt, setTxt] = useState<Record<string, string>>({});
+  const [err, setErr] = useState("");
+  const load = useCallback(() => {
+    api("/inquiries").then(setList).catch((e) => setErr(e.message));
+    api("/center-answers").then(setCas).catch(() => {});
+  }, [api]);
+  useEffect(() => { load(); const t = setInterval(load, 10000); return () => clearInterval(t); }, [load]);
+  const act = async (path: string, body?: any) => {
+    setErr("");
+    try { await api(path, { method: "POST", body }); load(); onChange(); }
+    catch (e: any) { setErr(e.message); }
+  };
+  const t = (k: string, d = "") => txt[k] ?? d;
+  const setT = (k: string, v: string) => setTxt({ ...txt, [k]: v });
+  return (
+    <>
+      {err && <div className="err">{err}</div>}
+      {list.length === 0 && <div className="card muted">작업자가 보낸 확인 요청이 없습니다.</div>}
+      {list.map((q) => (
+        <div className="card" key={q.id} style={q.status === "NEW" ? { borderColor: "var(--bad)" } : undefined}>
+          <div className="row">
+            <span className={`chip ${INQ_STATUS[q.status][1]}`}>{INQ_STATUS[q.status][0]}</span>
+            <b>{q.shipper.name}</b>
+            <span className="muted">{q.asker.name} · {fmtTime(q.createdAt)}</span>
+            <label className="row" style={{ margin: 0, color: "var(--ink)" }}>
+              <input type="checkbox" style={{ width: "auto" }} checked={q.needsShipper} disabled={q.status === "DONE"} onChange={(e) => act(`/inquiries/${q.id}/needs-shipper`, { value: e.target.checked })} />
+              <span className={`chip ${q.needsShipper ? "warn" : ""}`}>화주사 확인 필요</span>
+            </label>
+          </div>
+          <p style={{ margin: "8px 0", fontSize: 16 }}>{q.question}</p>
+
+          {(q.status === "NEW" || q.status === "ASKED_SHIPPER") && (
+            <>
+              {q.status === "ASKED_SHIPPER" && (
+                <div className="diffbox chg"><b>화주사에 보낸 문의</b> · {fmtTime(q.shipperAskedAt)}<div>{q.shipperQuestion}</div><div className="muted">화주사 담당자가 앱 문의함에서 답하면 여기에 도착합니다.</div></div>
+              )}
+              <div className="row" style={{ marginTop: 8 }}>
+                {q.status === "NEW" && <button className={`btn ${mode[q.id] === "answer" ? "" : "ghost"}`} onClick={() => setMode({ ...mode, [q.id]: "answer" })}>바로 답변</button>}
+                {q.status === "NEW" && <button className={`btn ${mode[q.id] === "shipper" ? "" : "ghost"}`} onClick={() => setMode({ ...mode, [q.id]: "shipper" })}>화주사에 문의</button>}
+                <button className={`btn ${mode[q.id] === "external" ? "" : "ghost"}`} onClick={() => setMode({ ...mode, [q.id]: "external" })}>외부 확인 기록</button>
+              </div>
+              {mode[q.id] === "answer" && (
+                <div style={{ marginTop: 8 }}>
+                  {q.needsShipper && <div className="diffbox chg">안전·보관 조건·계약과 관련된 질문입니다. 화주사 확인을 먼저 권합니다.</div>}
+                  <textarea value={t(`a${q.id}`)} onChange={(e) => setT(`a${q.id}`, e.target.value)} placeholder="작업자에게 보낼 답 (관리자 판단)" />
+                  <button className="btn" onClick={() => act(`/inquiries/${q.id}/answer`, { answer: t(`a${q.id}`) })}>바로 답변</button>
+                </div>
+              )}
+              {mode[q.id] === "shipper" && (
+                <div style={{ marginTop: 8 }}>
+                  <p className="muted">화주사에는 아래 문의 내용만 보입니다(작업자 이름은 보내지 않음).</p>
+                  <textarea value={t(`s${q.id}`, q.question)} onChange={(e) => setT(`s${q.id}`, e.target.value)} />
+                  <button className="btn" onClick={() => act(`/inquiries/${q.id}/ask-shipper`, { message: t(`s${q.id}`, q.question) })}>화주사에 문의</button>
+                </div>
+              )}
+              {mode[q.id] === "external" && (
+                <div style={{ marginTop: 8 }}>
+                  <div className="grid">
+                    <div><label>확인 방법</label><select value={t(`m${q.id}`, "전화")} onChange={(e) => setT(`m${q.id}`, e.target.value)}><option>전화</option><option>메일</option><option>메신저</option><option>방문</option></select></div>
+                    <div><label>확인 날짜</label><input type="date" value={t(`d${q.id}`, new Date().toISOString().slice(0, 10))} onChange={(e) => setT(`d${q.id}`, e.target.value)} /></div>
+                  </div>
+                  <label>화주사가 알려 준 내용</label>
+                  <textarea value={t(`e${q.id}`)} onChange={(e) => setT(`e${q.id}`, e.target.value)} />
+                  <button className="btn" onClick={() => act(`/inquiries/${q.id}/external`, { method: t(`m${q.id}`, "전화"), date: t(`d${q.id}`, new Date().toISOString().slice(0, 10)), content: t(`e${q.id}`) })}>외부 확인 기록</button>
+                </div>
+              )}
+            </>
+          )}
+
+          {q.status === "SHIPPER_REPLIED" && (
+            <div style={{ marginTop: 8 }}>
+              <div className="diffbox add"><b>화주사 답</b> · {q.source === "EXTERNAL" ? `${q.externalMethod}로 확인` : "앱 문의함"} · {fmtDate(q.confirmedDate)}<div>{q.shipperAnswer}</div></div>
+              <label>작업자에게 보낼 답 (다듬어도 됩니다)</label>
+              <textarea value={t(`f${q.id}`, q.shipperAnswer ?? "")} onChange={(e) => setT(`f${q.id}`, e.target.value)} />
+              <button className="btn" onClick={() => act(`/inquiries/${q.id}/deliver`, { answer: t(`f${q.id}`, q.shipperAnswer ?? "") })}>작업자에게 전달</button>
+            </div>
+          )}
+
+          {q.status === "DONE" && (
+            <div style={{ marginTop: 8 }}>
+              <div className="answer">{q.finalAnswer}<div className="muted" style={{ marginTop: 4 }}>{q.source === "MANAGER" ? "관리자 판단" : `화주사 확인 ${fmtDate(q.confirmedDate)}`} · 작업자에게 전달 {fmtTime(q.deliveredAt)}</div></div>
+              <div style={{ marginTop: 8 }}>
+                {q.savedAnswerId ? <span className="chip ok">센터 답변으로 저장됨</span> : <button className="btn ghost" onClick={() => act(`/inquiries/${q.id}/save`)}>센터 답변으로 저장</button>}
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+      {cas.length > 0 && (
+        <div className="card">
+          <h2>저장된 센터 답변</h2>
+          <p className="muted">같은 화주사에서 같은 질문이 오면 규칙 질문에 &lsquo;센터 답변&rsquo;으로 바로 나옵니다.</p>
+          {cas.map((c) => (
+            <div className="ca" key={c.id}>
+              <div className="row">
+                <b>{c.shipper.name}</b>
+                {c.shipperConfirmed ? <span className="chip ok">화주사 확인 {fmtDate(c.confirmedDate)}</span> : <span className="chip">관리자 판단</span>}
+                {c.needsRecheck && <><span className="chip warn">{c.recheckReason}</span><button className="btn ghost" onClick={() => act(`/center-answers/${c.id}/rechecked`)}>재확인 완료</button></>}
+              </div>
+              <div className="muted">질문: {c.question}</div>
+              <div>{c.answer}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -430,6 +629,11 @@ function DamageInbox({ api, onChange }: { api: Api; onChange: () => void }) {
               <><span className="chip ok">확인됨</span><span className={`chip ${minsSince(d.createdAt, d.confirmedAt) > 30 ? "bad" : "ok"}`}>확인까지 {minsSince(d.createdAt, d.confirmedAt)}분</span></>
             )}
             <b>{d.shipper.name}</b><span className="muted">{d.item?.name ?? "품목 미지정"} · {d.qty}박스 · {d.reporter.name} · {fmtTime(d.createdAt)}</span>
+          </div>
+          <div className="diffbox chg">
+            <b>어떤 물건인가요</b> · {d.item?.name ?? "품목 미지정"}
+            {d.workOrder ? ` · 로트 ${d.workOrder.lotNo} · 위치 ${d.workOrder.location} · 예정 ${d.workOrder.expectedQty}개` : " · 입고 작업 연결 없음"}
+            {d.labelNo ? ` · 라벨/송장 ${d.labelNo}` : ""}
           </div>
           <p style={{ margin: "8px 0" }}>{d.description}</p>
           {d.photo && <img src={d.photo} className="photo" alt="파손 사진" />}
@@ -615,7 +819,7 @@ function ChangeView({ doc }: { doc: any }) {
 
 // ───────── 화주사 ─────────
 function ShipperView({ api, user }: { api: Api; user: User }) {
-  const [tab, setTab] = useState<"stock" | "inbound" | "damage">("stock");
+  const [tab, setTab] = useState<"stock" | "inbound" | "damage" | "inq">("stock");
   const [orders, setOrders] = useState<any[]>([]);
   const [damages, setDamages] = useState<any[]>([]);
   useEffect(() => { api("/work-orders").then(setOrders).catch(() => {}); api("/damages").then(setDamages).catch(() => {}); }, [api]);
@@ -626,7 +830,9 @@ function ShipperView({ api, user }: { api: Api; user: User }) {
         <button className={tab === "stock" ? "on" : ""} onClick={() => setTab("stock")}>내 재고</button>
         <button className={tab === "inbound" ? "on" : ""} onClick={() => setTab("inbound")}>입고 내역</button>
         <button className={tab === "damage" ? "on" : ""} onClick={() => setTab("damage")}>파손 보고 {damages.length}</button>
+        <button className={tab === "inq" ? "on" : ""} onClick={() => setTab("inq")}>센터 문의함</button>
       </div>
+      {tab === "inq" && <ShipperInquiries api={api} />}
       {tab === "stock" && <Stock api={api} shippers={[]} fixed />}
       {tab === "inbound" && (
         <div className="card table-wrap">
@@ -650,5 +856,38 @@ function ShipperView({ api, user }: { api: Api; user: User }) {
         </>
       )}
     </div>
+  );
+}
+
+/** 화주사: 센터 문의함 (관리자가 보낸 문의만, 답 입력 → 전송) */
+function ShipperInquiries({ api }: { api: Api }) {
+  const [list, setList] = useState<any[]>([]);
+  const [ans, setAns] = useState<Record<number, string>>({});
+  const [err, setErr] = useState("");
+  const load = useCallback(() => api("/shipper-inquiries").then(setList).catch((e) => setErr(e.message)), [api]);
+  useEffect(() => { load(); }, [load]);
+  return (
+    <>
+      {err && <div className="err">{err}</div>}
+      {list.length === 0 && <div className="card muted">센터에서 온 문의가 없습니다.</div>}
+      {list.map((q) => (
+        <div className="card" key={q.id}>
+          <div className="row">{q.answer ? <span className="chip ok">답변 보냄</span> : <span className="chip warn">답변 필요</span>}<span className="muted">센터 문의 · {fmtTime(q.askedAt)}</span></div>
+          <p style={{ margin: "8px 0", fontSize: 16 }}>{q.message}</p>
+          {q.answer ? (
+            <div className="answer">{q.answer}<div className="muted" style={{ marginTop: 4 }}>보낸 시각 {fmtTime(q.answeredAt)}</div></div>
+          ) : (
+            <>
+              <textarea value={ans[q.id] ?? ""} onChange={(e) => setAns({ ...ans, [q.id]: e.target.value })} placeholder="센터에 보낼 답을 적어 주세요" />
+              <button className="btn" disabled={!(ans[q.id] ?? "").trim()} onClick={async () => {
+                setErr("");
+                try { await api(`/shipper-inquiries/${q.id}/reply`, { method: "POST", body: { answer: ans[q.id] } }); load(); }
+                catch (e: any) { setErr(e.message); }
+              }}>전송</button>
+            </>
+          )}
+        </div>
+      ))}
+    </>
   );
 }

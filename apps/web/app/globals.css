@@ -4,7 +4,11 @@
   --bad: #b42318; --bad-bg: #fdecea; --warn: #8a5a00; --warn-bg: #fff4d6; --chip: #eef2f6;
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", sans-serif; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", sans-serif; word-break: keep-all; overflow-wrap: anywhere; }
+/* 한국어는 단어 단위로 줄바꿈 */
+button, input, select, textarea, td, th, p, div, span, b, h1, h2, h3 { word-break: keep-all; overflow-wrap: anywhere; }
+.ca { border: 1px solid #b7d3e6; background: #eef6fb; border-radius: 8px; padding: 10px 12px; margin-top: 8px; }
+.q { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 10px; background: #fff; }
 button, input, select, textarea { font: inherit; }
 .top { position: sticky; top: 0; z-index: 5; background: var(--brand); color: var(--brand-ink); padding: 10px 16px; display: flex; align-items: center; gap: 12px; }
 .top b { font-size: 16px; }

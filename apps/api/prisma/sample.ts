@@ -13,6 +13,8 @@ const PW = process.env.DEMO_PASSWORD || "demo1234";
 const day = (n: number) => new Date(Date.now() + n * 86400e3);
 
 async function main() {
+  await prisma.centerAnswer.deleteMany();
+  await prisma.inquiry.deleteMany();
   await prisma.docChunk.deleteMany();
   await prisma.document.deleteMany();
   await prisma.damageReport.deleteMany();
@@ -31,10 +33,10 @@ async function main() {
   const mk = (loginId: string, name: string, role: any, shipperId: number | null = null) =>
     prisma.user.create({ data: { loginId, name, role, shipperId, passwordHash: h } });
   await mk("center", "센터장", "ADMIN");
-  await mk("choi", "최 과장", "MANAGER");
-  await mk("kim", "관리자 김", "MANAGER");
-  const jang = await mk("jang", "장 씨 (냉장)", "WORKER");
-  const nguyen = await mk("nguyen", "응우옌 (냉동)", "WORKER");
+  await mk("choi", "관리자 1", "MANAGER");
+  await mk("kim", "관리자 2", "MANAGER");
+  const jang = await mk("jang", "작업자 A (냉장)", "WORKER");
+  const nguyen = await mk("nguyen", "작업자 B (냉동)", "WORKER");
   await mk("fresh", "신선마켓 담당자", "SHIPPER", fresh.id);
   await mk("beauty", "루미코스메틱 담당자", "SHIPPER", beauty.id);
   await mk("frozen", "한겨울푸드 담당자", "SHIPPER", frozen.id);

@@ -48,6 +48,8 @@ model Shipper {
   lots       StockLot[]
   damages    DamageReport[]
   documents  Document[]
+  inquiries  Inquiry[]
+  centerAnswers CenterAnswer[]
 }
 
 /// 사용자 (역할별)
@@ -61,6 +63,9 @@ model User {
   shipper      Shipper?       @relation(fields: [shipperId], references: [id])
   sessions     Session[]
   docAcks      DocAck[]
+  asked        Inquiry[]      @relation("asker")
+  handled      Inquiry[]      @relation("handler")
+  savedAnswers CenterAnswer[]
   assigned     WorkOrder[]    @relation("assignee")
   reported     DamageReport[] @relation("reporter")
   confirmed    DamageReport[] @relation("confirmer")
@@ -139,6 +144,7 @@ model DamageReport {
   reporterId    Int
   reporter      User         @relation("reporter", fields: [reporterId], references: [id])
   qty           Int          @default(1)
+  labelNo       String? // 박스 라벨·송장 번호 (선택)
   description   String
   photo         String? // 이미지 dataURL (축소본)
   status        DamageStatus @default(REPORTED)
@@ -194,4 +200,59 @@ model DocAck {
   ackedAt    DateTime @default(now())
 
   @@unique([documentId, userId])
+}
+
+enum InquiryStatus {
+  NEW // 작업자 요청, 관리자 미처리
+  ASKED_SHIPPER // 관리자가 화주사에 문의 중
+  SHIPPER_REPLIED // 화주사 답(앱 또는 외부 확인) 도착
+  DONE // 작업자에게 전달 완료
+}
+
+enum AnswerSource {
+  MANAGER // 관리자 판단
+  SHIPPER_APP // 화주사가 앱 문의함에서 답
+  EXTERNAL // 관리자가 전화·메일로 확인해 기록
+}
+
+/// 지침서에 없는 질문의 위임 (작업자 → 관리자 → 화주사 → 관리자 → 작업자) — 인터뷰 3차
+model Inquiry {
+  id               Int            @id @default(autoincrement())
+  shipperId        Int
+  shipper          Shipper        @relation(fields: [shipperId], references: [id])
+  askerId          Int
+  asker            User           @relation("asker", fields: [askerId], references: [id])
+  question         String // 작업자 원 질문 (화주사에 노출 금지)
+  needsShipper     Boolean        @default(false) // 안전·보관 조건·계약 관련이면 자동 표시 (관리자가 변경 가능)
+  status           InquiryStatus  @default(NEW)
+  handlerId        Int?
+  handler          User?          @relation("handler", fields: [handlerId], references: [id])
+  shipperQuestion  String? // 관리자가 정리해 화주사에 보낸 문의
+  shipperAskedAt   DateTime?
+  shipperAnswer    String?
+  shipperAnsweredAt DateTime?
+  externalMethod   String? // 전화·메일 등
+  source           AnswerSource?
+  confirmedDate    DateTime? // 화주사 확인 날짜
+  finalAnswer      String? // 작업자에게 전달한 답
+  deliveredAt      DateTime?
+  savedAnswerId    Int?
+  createdAt        DateTime       @default(now())
+}
+
+/// 센터 답변: 같은 화주사·같은 상황이면 다음 질문에 지침서 근거와 구분해 보여 줌
+model CenterAnswer {
+  id               Int      @id @default(autoincrement())
+  shipperId        Int
+  shipper          Shipper  @relation(fields: [shipperId], references: [id])
+  question         String
+  answer           String
+  shipperConfirmed Boolean  @default(false)
+  confirmedDate    DateTime?
+  savedById        Int
+  savedBy          User     @relation(fields: [savedById], references: [id])
+  savedAt          DateTime @default(now())
+  needsRecheck     Boolean  @default(false) // 지침 개정 후 재확인 필요
+  recheckReason    String?
+  embedding        Float[]
 }

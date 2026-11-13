@@ -165,7 +165,14 @@ export class WmsController {
     if (!b.photo || !String(b.photo).startsWith("data:image/")) throw new BadRequestException("파손 사진을 첨부해야 보고할 수 있습니다");
     if (String(b.photo).length > 1_500_000) throw new BadRequestException("사진이 너무 큽니다");
     if (!int(b.itemId) && !int(b.workOrderId)) throw new BadRequestException("어떤 입고 물건인지(품목 또는 작업지시) 골라야 합니다");
-    const itemId = int(b.itemId);
+    let itemId = int(b.itemId);
+    const woId = int(b.workOrderId);
+    if (woId) {
+      // 작업지시 카드에서 보고하면 그 입고 건(품목·로트·위치·예정 수량)을 자동 연결
+      const wo = await this.prisma.workOrder.findUnique({ where: { id: woId } });
+      if (!wo || wo.shipperId !== shipper.id) throw new BadRequestException("이 화주사의 입고 작업이 아닙니다");
+      itemId = wo.itemId;
+    }
     if (itemId) {
       const it = await this.prisma.item.findUnique({ where: { id: itemId } });
       if (!it || it.shipperId !== shipper.id) throw new BadRequestException("이 화주사의 품목이 아닙니다");
@@ -185,6 +192,7 @@ export class WmsController {
         workOrderId: int(b.workOrderId) ?? null,
         reporterId: u.id,
         qty: Math.max(1, Number(b.qty) || 1),
+        labelNo: String(b.labelNo ?? "").trim().slice(0, 60) || null,
         description: b.description.trim(),
         photo: b.photo || null,
         aiGuidance: ans.answer,
@@ -220,11 +228,11 @@ export class WmsController {
     if (u.role === "WORKER") where.reporterId = u.id;
     const rows = await this.prisma.damageReport.findMany({
       where,
-      include: { shipper: true, item: true, reporter: { select: { name: true } }, confirmedBy: { select: { name: true } } },
+      include: { shipper: true, item: true, workOrder: { select: { lotNo: true, location: true, expectedQty: true } }, reporter: { select: { name: true } }, confirmedBy: { select: { name: true } } },
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],
     });
     // 화주사에게는 센터 내부 처리 지침(AI 첨부·근거 원문)을 내려보내지 않는다
-    if (u.role === "SHIPPER") return rows.map(({ aiGuidance, aiCitations, notifySource, managerNote, confirmedBy, confirmedById, notifiedById, ...r }) => r);
+    if (u.role === "SHIPPER") return rows.map(({ aiGuidance, aiCitations, notifySource, managerNote, confirmedBy, confirmedById, notifiedById, reporter, reporterId, workOrder, ...r }) => r);
     return rows;
   }
 
@@ -257,14 +265,16 @@ export class WmsController {
   @Roles(...OFFICE)
   @Get("dashboard")
   async dashboard() {
-    const [unconfirmed, overdue, notifyOverdue, planned, doneWithDiff] = await Promise.all([
+    const [unconfirmed, overdue, notifyOverdue, planned, doneWithDiff, openInquiries, shipperReplied] = await Promise.all([
       this.prisma.damageReport.count({ where: { status: "REPORTED" } }),
       this.prisma.damageReport.count({ where: { status: "REPORTED", createdAt: { lt: new Date(Date.now() - DAMAGE_SLA_MIN * 60e3) } } }),
       this.prisma.damageReport.count({ where: { notifiedAt: null, notifyDueAt: { lt: new Date() } } }),
       this.prisma.workOrder.count({ where: { status: "PLANNED" } }),
       this.prisma.workOrder.findMany({ where: { status: "DONE" }, select: { expectedQty: true, actualQty: true } }),
+      this.prisma.inquiry.count({ where: { status: { not: "DONE" } } }),
+      this.prisma.inquiry.count({ where: { status: "SHIPPER_REPLIED" } }),
     ]);
-    return { unconfirmedDamages: unconfirmed, overdueDamages: overdue, notifyOverdue, damageSlaMinutes: DAMAGE_SLA_MIN, plannedOrders: planned, qtyMismatches: doneWithDiff.filter((w) => w.actualQty !== w.expectedQty).length };
+    return { unconfirmedDamages: unconfirmed, overdueDamages: overdue, notifyOverdue, damageSlaMinutes: DAMAGE_SLA_MIN, plannedOrders: planned, openInquiries, shipperReplied, qtyMismatches: doneWithDiff.filter((w) => w.actualQty !== w.expectedQty).length };
   }
 
   // ───────── 문서 (지침서·계약서) ─────────
@@ -309,6 +319,13 @@ export class WmsController {
       changeSummary = { fromVersion: prev.version, ...d, summary: await this.ai.summarizeDiff(d) };
     }
     const embeds = await this.ai.embed(sections.map((s) => `${title} ${s.section}\n${s.text}`));
+    if (prev) {
+      // 인터뷰 3차: 지침서가 개정되면 전에 받은 답도 다시 봐야 한다
+      await this.prisma.centerAnswer.updateMany({
+        where: { shipperId },
+        data: { needsRecheck: true, recheckReason: `${kind === "GUIDE" ? "지침서" : "계약서"} 제${prev.version + 1}판 개정 후 재확인 필요` },
+      });
+    }
     return this.prisma.$transaction(async (tx) => {
       await tx.document.updateMany({ where: { shipperId, kind, isCurrent: true }, data: { isCurrent: false } });
       const version = (prev?.version ?? (await tx.document.count({ where: { shipperId, kind } }))) + 1;
@@ -384,8 +401,11 @@ export class WmsController {
     const shipper = await this.prisma.shipper.findUnique({ where: { id: Number(b.shipperId) } });
     if (!shipper) throw new BadRequestException("화주사를 고르세요");
     if (!b.question?.trim()) throw new BadRequestException("질문을 입력하세요");
-    const cites = await this.ai.search(shipper.id, b.question);
+    const [cites, centerAnswers] = await Promise.all([this.ai.search(shipper.id, b.question), this.ai.similarCenterAnswers(shipper.id, b.question)]);
     const ans = await this.ai.answer(shipper.name, b.question, cites);
-    return { ...ans, shipper: shipper.name, citations: ans.found ? cites : [], aiEnabled: this.ai.enabled };
+    if (!ans.found)
+      ans.answer = "지침서에 없는 내용이에요. 현장에서 바로 정하지 말고 관리자 확인을 받으세요.";
+    // 근거가 없을 때: 가까운 조항 1~2개를 참고로, 센터 답변이 있으면 지침서 근거와 구분해 함께
+    return { ...ans, shipper: shipper.name, shipperId: shipper.id, citations: ans.found ? cites : [], nearby: ans.found ? [] : cites.slice(0, 2), centerAnswers, aiEnabled: this.ai.enabled };
   }
 }

@@ -39,7 +39,7 @@ export function expandQuery(q: string) {
   return extra.length ? `${q}\n(관련 조항: ${extra.join(", ")})` : q;
 }
 
-function cosine(a: number[], b: number[]) {
+export function cosine(a: number[], b: number[]) {
   let d = 0, na = 0, nb = 0;
   for (let i = 0; i < a.length; i++) { d += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
   return na && nb ? d / Math.sqrt(na * nb) : 0;
@@ -173,5 +173,27 @@ export class AiService {
       parts,
     );
     return out?.trim() ?? `변경 ${d.changed.length}개 · 추가 ${d.added.length}개 · 삭제 ${d.removed.length}개`;
+  }
+
+  /** 같은 화주사의 센터 답변 중 비슷한 질문 (검색용) */
+  async similarCenterAnswers(shipperId: number, question: string) {
+    const list = await this.prisma.centerAnswer.findMany({ where: { shipperId } });
+    if (!list.length) return [];
+    const [qe] = await this.embed([question]);
+    // 의미 유사도 + 낱말 겹침 (같은 화주사·같은 상황의 질문만)
+    const scored = list.map((c) => {
+      const kw = Math.max(keywordScore(question, c.question), keywordScore(c.question, question));
+      const sem = qe.length && c.embedding.length ? cosine(qe, c.embedding) : 0;
+      return { c, s: qe.length && c.embedding.length ? sem + kw * 0.3 : kw };
+    });
+    return scored
+      .filter((x) => x.s >= 0.5)
+      .sort((a, b) => b.s - a.s)
+      .slice(0, 2)
+      .map(({ c }) => ({
+        id: c.id, question: c.question, answer: c.answer, shipperConfirmed: c.shipperConfirmed, confirmedDate: c.confirmedDate,
+        daysAgo: c.confirmedDate ? Math.floor((Date.now() - c.confirmedDate.getTime()) / 86400e3) : null,
+        needsRecheck: c.needsRecheck, recheckReason: c.recheckReason,
+      }));
   }
 }
