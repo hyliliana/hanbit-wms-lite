@@ -221,6 +221,7 @@ function Worker({ api, user }: { api: Api; user: User }) {
               <div className="row"><span className={`chip ${w.item.zone}`}>{ZONE[w.item.zone]}</span><b>{w.shipper.name}</b><span className="muted">로트 {w.lotNo}</span></div>
               <h3 style={{ margin: "6px 0" }}>{w.item.name}</h3>
               <div className="muted">보관 위치 <b>{w.location}</b> · 예정 <b>{w.expectedQty}</b>개 · 유통기한 {fmtDate(w.expiryDate)}</div>
+              <Cautions api={api} shipperId={w.shipperId} shipperName={w.shipper.name} />
               <label>실제 받은 수량</label>
               <input inputMode="numeric" value={qty[w.id] ?? ""} onChange={(e) => setQty({ ...qty, [w.id]: e.target.value.replace(/[^0-9]/g, "") })} placeholder="세어 본 수량" />
               <div className="row" style={{ marginTop: 8 }}>
@@ -240,6 +241,28 @@ function Worker({ api, user }: { api: Api; user: User }) {
       )}
       {tab === "damage" && <DamageForm api={api} shippers={shippers} preset={damageFor} onDone={(m) => { setMsg(m); setTab("tasks"); load(); }} />}
       {tab === "ask" && <AskBox api={api} shippers={shippers} />}
+    </div>
+  );
+}
+
+/** 작업지시 카드에 붙는 화주사 주의사항 (현행 지침서 원문, 펼쳐 보기) */
+function Cautions({ api, shipperId, shipperName }: { api: Api; shipperId: number; shipperName: string }) {
+  const [open, setOpen] = useState(false);
+  const [data, setData] = useState<any>(null);
+  const toggle = async () => {
+    if (!open && !data) { try { setData(await api(`/shippers/${shipperId}/cautions`)); } catch { setData({ items: [] }); } }
+    setOpen(!open);
+  };
+  return (
+    <div style={{ marginTop: 8 }}>
+      <button className="btn ghost" onClick={toggle}>{open ? "주의사항 닫기" : `${shipperName} 입고 주의사항 보기`}</button>
+      {open && data && (
+        <div style={{ marginTop: 6 }}>
+          {data.items.length === 0 && <p className="muted">등록된 지침서가 없습니다. 관리자에게 확인하세요.</p>}
+          {data.title && <p className="muted">{data.title} · 제{data.version}판 (현행)</p>}
+          {data.items.map((c: any, i: number) => <div className="cite" key={i}><b>{c.section}</b><div>{c.text}</div></div>)}
+        </div>
+      )}
     </div>
   );
 }
