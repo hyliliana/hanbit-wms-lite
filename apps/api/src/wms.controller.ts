@@ -404,9 +404,11 @@ export class WmsController {
     if (!b.question?.trim()) throw new BadRequestException("질문을 입력하세요");
     const [cites, centerAnswers] = await Promise.all([this.ai.search(shipper.id, b.question), this.ai.similarCenterAnswers(shipper.id, b.question)]);
     const ans = await this.ai.answer(shipper.name, b.question, cites);
-    if (!ans.found)
-      ans.answer = "지침서에 없는 내용이에요. 현장에서 바로 정하지 말고 관리자 확인을 받으세요.";
+    // 지침서 근거가 없어도, 같은 상황의 센터 답변이 있으면 그 답을 대표 답으로 보여 준다
+    const byCenter = !ans.found && centerAnswers.length > 0;
+    if (byCenter) ans.answer = `센터 답변이 있어요: ${centerAnswers[0].answer}`;
+    else if (!ans.found) ans.answer = "지침서에 없는 내용이에요. 현장에서 바로 정하지 말고 관리자 확인을 받으세요.";
     // 근거가 없을 때: 가까운 조항 1~2개를 참고로, 센터 답변이 있으면 지침서 근거와 구분해 함께
-    return { ...ans, shipper: shipper.name, shipperId: shipper.id, citations: ans.found ? cites : [], nearby: ans.found ? [] : cites.slice(0, 2), centerAnswers, aiEnabled: this.ai.enabled };
+    return { ...ans, byCenter, shipper: shipper.name, shipperId: shipper.id, citations: ans.found ? cites : [], nearby: ans.found || byCenter ? [] : cites.slice(0, 2), centerAnswers, aiEnabled: this.ai.enabled };
   }
 }

@@ -160,10 +160,10 @@ function AskBox({ api, shippers, onAsked }: { api: Api; shippers: any[]; onAsked
                 <div className="okmsg">관리자에게 확인 요청을 보냈습니다. 답이 오면 &lsquo;내 질문&rsquo;에서 볼 수 있습니다.</div>
               ) : (
                 <div style={{ marginTop: 10 }}>
-                  <button className="btn big" onClick={async () => {
+                  <button className={res.byCenter ? "btn ghost" : "btn big"} onClick={async () => {
                     try { await api("/inquiries", { method: "POST", body: { shipperId: res.shipperId, question: q } }); setSent(true); onAsked?.(); }
                     catch (e: any) { setErr(e.message); }
-                  }}>관리자에게 확인 요청</button>
+                  }}>{res.byCenter ? "상황이 다르면 다시 확인 요청" : "관리자에게 확인 요청"}</button>
                 </div>
               )}
             </>
@@ -520,14 +520,14 @@ function InquiryInbox({ api, onChange }: { api: Api; onChange: () => void }) {
                 {q.status === "NEW" && <button className={`btn ${mode[q.id] === "shipper" ? "" : "ghost"}`} onClick={() => setMode({ ...mode, [q.id]: "shipper" })}>화주사에 문의</button>}
                 <button className={`btn ${mode[q.id] === "external" ? "" : "ghost"}`} onClick={() => setMode({ ...mode, [q.id]: "external" })}>외부 확인 기록</button>
               </div>
-              {mode[q.id] === "answer" && (
+              {q.status === "NEW" && mode[q.id] === "answer" && (
                 <div style={{ marginTop: 8 }}>
                   {q.needsShipper && <div className="diffbox chg">안전·보관 조건·계약과 관련된 질문입니다. 화주사 확인을 먼저 권합니다.</div>}
                   <textarea value={t(`a${q.id}`)} onChange={(e) => setT(`a${q.id}`, e.target.value)} placeholder="작업자에게 보낼 답 (관리자 판단)" />
                   <button className="btn" onClick={() => act(`/inquiries/${q.id}/answer`, { answer: t(`a${q.id}`) })}>바로 답변</button>
                 </div>
               )}
-              {mode[q.id] === "shipper" && (
+              {q.status === "NEW" && mode[q.id] === "shipper" && (
                 <div style={{ marginTop: 8 }}>
                   <p className="muted">화주사에는 아래 문의 내용만 보입니다(작업자 이름은 보내지 않음).</p>
                   <textarea value={t(`s${q.id}`, q.question)} onChange={(e) => setT(`s${q.id}`, e.target.value)} />

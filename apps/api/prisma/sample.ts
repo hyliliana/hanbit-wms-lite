@@ -55,8 +55,9 @@ async function main() {
       data: { shipperId: it.shipperId, itemId: it.id, expectedQty: exp, actualQty: act, location: loc, lotNo: lot, expiryDate: expiry, status: "DONE", assigneeId: who, completedAt: day(-1) },
     });
     await prisma.stockLot.create({ data: { shipperId: it.shipperId, itemId: it.id, workOrderId: w.id, location: loc, lotNo: lot, qty: act, expiryDate: expiry, receivedAt: day(-1) } });
+    return w;
   };
-  await done(milk, 40, 40, "C-01-02", "FM1110", day(9), jang.id);
+  const milkLot = await done(milk, 40, 40, "C-01-02", "FM1110", day(9), jang.id);
   await done(cream, 120, 118, "A-03-01", "BC1110", day(400), jang.id);
   await done(dump, 60, 60, "Z-02-04", "ZD1109", day(180), nguyen.id);
 
@@ -99,7 +100,7 @@ async function main() {
   const ans = await ai.answer(fresh.name, `이 파손을 어떻게 처리해야 하나요? 상황: ${desc}`, cites);
   await prisma.damageReport.create({
     data: {
-      shipperId: fresh.id, itemId: milk.id, reporterId: jang.id, qty: 2, description: desc, createdAt: reported,
+      shipperId: fresh.id, itemId: milk.id, workOrderId: milkLot.id, reporterId: jang.id, qty: 2, description: desc, createdAt: reported,
       photo: "data:image/jpeg;base64," + readFileSync(join(__dirname, "demo-photo.jpg")).toString("base64"),
       aiGuidance: ans.answer, aiCitations: cites.map((c) => ({ title: c.title, version: c.version, section: c.section, text: c.text })),
       notifyHours: 2, notifyDueAt: new Date(reported.getTime() + 2 * 3600e3), notifySource: "신선마켓(FRESH) 물류 취급 지침서 제1판 · 제4조 (파손 입고 시 처리)",
