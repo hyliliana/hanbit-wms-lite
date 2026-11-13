@@ -1,0 +1,282 @@
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  ForbiddenException,
+  Get,
+  NotFoundException,
+  Param,
+  ParseIntPipe,
+  Post,
+  Query,
+  Req,
+  UnauthorizedException,
+} from "@nestjs/common";
+import { randomBytes } from "crypto";
+import { PrismaService } from "./prisma.service";
+import { AiService, splitSections } from "./ai.service";
+import { AuthUser, Public, Roles, checkPassword, scopeShipper } from "./auth";
+
+const STAFF = ["ADMIN", "MANAGER", "WORKER"] as const;
+const OFFICE = ["ADMIN", "MANAGER"] as const;
+
+const int = (v: any) => (v === undefined || v === null || v === "" ? undefined : Number(v));
+
+@Controller()
+export class WmsController {
+  constructor(private prisma: PrismaService, private ai: AiService) {}
+
+  // ───────── 로그인 ─────────
+  @Public()
+  @Post("auth/login")
+  async login(@Body() b: { loginId: string; password: string }) {
+    const u = await this.prisma.user.findUnique({ where: { loginId: b?.loginId ?? "" }, include: { shipper: true } });
+    if (!u || !checkPassword(b.password ?? "", u.passwordHash)) throw new UnauthorizedException("아이디 또는 비밀번호가 맞지 않습니다");
+    const token = randomBytes(24).toString("hex");
+    await this.prisma.session.create({ data: { token, userId: u.id, expiresAt: new Date(Date.now() + 12 * 3600e3) } });
+    return { token, user: { id: u.id, name: u.name, role: u.role, shipperId: u.shipperId, shipperName: u.shipper?.name ?? null } };
+  }
+
+  @Public()
+  @Get("auth/demo-accounts")
+  async demoAccounts() {
+    const us = await this.prisma.user.findMany({ include: { shipper: true }, orderBy: { id: "asc" } });
+    return us.map((u) => ({ loginId: u.loginId, name: u.name, role: u.role, shipper: u.shipper?.name ?? null }));
+  }
+
+  @Get("me")
+  me(@Req() req: any) {
+    return req.user;
+  }
+
+  // ───────── 화주사·품목 ─────────
+  @Get("shippers")
+  async shippers(@Req() req: any) {
+    const u: AuthUser = req.user;
+    const where = u.role === "SHIPPER" ? { id: u.shipperId! } : {};
+    return this.prisma.shipper.findMany({ where, orderBy: { id: "asc" } });
+  }
+
+  @Get("items")
+  async items(@Req() req: any, @Query("shipperId") sid?: string) {
+    const shipperId = scopeShipper(req.user, int(sid));
+    return this.prisma.item.findMany({ where: { shipperId }, orderBy: { id: "asc" } });
+  }
+
+  // ───────── 입고 작업지시 ─────────
+  @Get("work-orders")
+  async workOrders(@Req() req: any, @Query("shipperId") sid?: string, @Query("status") status?: string) {
+    const u: AuthUser = req.user;
+    const shipperId = scopeShipper(u, int(sid));
+    const where: any = { shipperId };
+    if (status === "PLANNED" || status === "DONE") where.status = status;
+    if (u.role === "WORKER") where.OR = [{ assigneeId: u.id }, { assigneeId: null }];
+    const rows = await this.prisma.workOrder.findMany({
+      where,
+      include: { item: true, shipper: true, assignee: { select: { name: true } } },
+      orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+    });
+    return rows.map((w) => ({ ...w, diff: w.actualQty === null ? null : w.actualQty - w.expectedQty }));
+  }
+
+  @Roles(...OFFICE)
+  @Post("work-orders")
+  async createWorkOrder(@Body() b: any) {
+    const item = await this.prisma.item.findUnique({ where: { id: Number(b.itemId) } });
+    if (!item) throw new BadRequestException("품목을 고르세요");
+    const qty = Number(b.expectedQty);
+    if (!Number.isInteger(qty) || qty <= 0) throw new BadRequestException("예정 수량은 1 이상 정수여야 합니다");
+    if (!b.location) throw new BadRequestException("보관 위치를 입력하세요");
+    return this.prisma.workOrder.create({
+      data: {
+        shipperId: item.shipperId,
+        itemId: item.id,
+        expectedQty: qty,
+        location: String(b.location),
+        lotNo: b.lotNo || `L${Date.now().toString().slice(-6)}`,
+        expiryDate: b.expiryDate ? new Date(b.expiryDate) : null,
+        assigneeId: int(b.assigneeId) ?? null,
+      },
+    });
+  }
+
+  /** 작업자가 실제 수량을 넣고 완료 → 재고 생성. 실제 수량 없이 완료 불가 */
+  @Roles(...STAFF)
+  @Post("work-orders/:id/complete")
+  async complete(@Req() req: any, @Param("id", ParseIntPipe) id: number, @Body() b: any) {
+    const u: AuthUser = req.user;
+    const actual = Number(b?.actualQty);
+    if (b?.actualQty === undefined || b?.actualQty === "" || !Number.isInteger(actual) || actual < 0)
+      throw new BadRequestException("실제 수량(0 이상 정수)을 입력해야 완료할 수 있습니다");
+    return this.prisma.$transaction(async (tx) => {
+      const w = await tx.workOrder.findUnique({ where: { id } });
+      if (!w) throw new NotFoundException("작업지시가 없습니다");
+      if (w.status === "DONE") throw new BadRequestException("이미 완료된 작업입니다");
+      if (u.role === "WORKER" && w.assigneeId && w.assigneeId !== u.id) throw new ForbiddenException("다른 작업자에게 배정된 작업입니다");
+      const done = await tx.workOrder.update({
+        where: { id },
+        data: { actualQty: actual, status: "DONE", completedAt: new Date(), assigneeId: w.assigneeId ?? u.id, note: b.note || null },
+      });
+      if (actual > 0) {
+        await tx.stockLot.create({
+          data: { shipperId: w.shipperId, itemId: w.itemId, workOrderId: w.id, location: w.location, lotNo: w.lotNo, qty: actual, expiryDate: w.expiryDate },
+        });
+      }
+      return { ...done, diff: actual - w.expectedQty };
+    });
+  }
+
+  // ───────── 재고 (화주사는 자기 것만) ─────────
+  @Get("stock")
+  async stock(@Req() req: any, @Query("shipperId") sid?: string) {
+    const shipperId = scopeShipper(req.user, int(sid));
+    return this.prisma.stockLot.findMany({
+      where: { shipperId, qty: { gt: 0 } },
+      include: { item: true, shipper: true },
+      orderBy: [{ shipperId: "asc" }, { expiryDate: "asc" }],
+    });
+  }
+
+  // ───────── 파손 보고 ─────────
+  @Roles(...STAFF)
+  @Post("damages")
+  async reportDamage(@Req() req: any, @Body() b: any) {
+    const u: AuthUser = req.user;
+    const shipper = await this.prisma.shipper.findUnique({ where: { id: Number(b.shipperId) } });
+    if (!shipper) throw new BadRequestException("화주사를 고르세요");
+    if (!b.description?.trim()) throw new BadRequestException("어떤 파손인지 적어 주세요");
+    if (b.photo && String(b.photo).length > 1_500_000) throw new BadRequestException("사진이 너무 큽니다");
+    const itemId = int(b.itemId);
+    if (itemId) {
+      const it = await this.prisma.item.findUnique({ where: { id: itemId } });
+      if (!it || it.shipperId !== shipper.id) throw new BadRequestException("이 화주사의 품목이 아닙니다");
+    }
+    // 보고 순간 그 화주사 지침서에서 파손 처리 방법을 찾아 붙인다 (판단은 관리자)
+    const q = `파손 입고 시 처리 방법과 보고 기한, 사진 기준, 파손 책임. 상황: ${b.description}`;
+    const cites = await this.ai.search(shipper.id, q, 3);
+    const ans = await this.ai.answer(shipper.name, `이 파손을 어떻게 처리해야 하나요? 상황: ${b.description}`, cites);
+    return this.prisma.damageReport.create({
+      data: {
+        shipperId: shipper.id,
+        itemId: itemId ?? null,
+        workOrderId: int(b.workOrderId) ?? null,
+        reporterId: u.id,
+        qty: Math.max(1, Number(b.qty) || 1),
+        description: b.description.trim(),
+        photo: b.photo || null,
+        aiGuidance: ans.answer,
+        aiCitations: cites.map((c) => ({ title: c.title, version: c.version, section: c.section, text: c.text })),
+      },
+    });
+  }
+
+  @Get("damages")
+  async damages(@Req() req: any, @Query("status") status?: string, @Query("shipperId") sid?: string) {
+    const u: AuthUser = req.user;
+    const shipperId = scopeShipper(u, int(sid));
+    const where: any = { shipperId };
+    if (status === "REPORTED" || status === "CONFIRMED") where.status = status;
+    if (u.role === "WORKER") where.reporterId = u.id;
+    return this.prisma.damageReport.findMany({
+      where,
+      include: { shipper: true, item: true, reporter: { select: { name: true } }, confirmedBy: { select: { name: true } } },
+      orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+    });
+  }
+
+  @Roles(...OFFICE)
+  @Post("damages/:id/confirm")
+  async confirmDamage(@Req() req: any, @Param("id", ParseIntPipe) id: number, @Body() b: any) {
+    const d = await this.prisma.damageReport.findUnique({ where: { id } });
+    if (!d) throw new NotFoundException("보고가 없습니다");
+    if (d.status === "CONFIRMED") throw new BadRequestException("이미 확인한 보고입니다");
+    return this.prisma.damageReport.update({
+      where: { id },
+      data: { status: "CONFIRMED", confirmedById: req.user.id, confirmedAt: new Date(), managerNote: b?.managerNote || null },
+    });
+  }
+
+  // ───────── 관리자 요약 ─────────
+  @Roles(...OFFICE)
+  @Get("dashboard")
+  async dashboard() {
+    const [unconfirmed, planned, doneWithDiff] = await Promise.all([
+      this.prisma.damageReport.count({ where: { status: "REPORTED" } }),
+      this.prisma.workOrder.count({ where: { status: "PLANNED" } }),
+      this.prisma.workOrder.findMany({ where: { status: "DONE" }, select: { expectedQty: true, actualQty: true } }),
+    ]);
+    return { unconfirmedDamages: unconfirmed, plannedOrders: planned, qtyMismatches: doneWithDiff.filter((w) => w.actualQty !== w.expectedQty).length };
+  }
+
+  // ───────── 문서 (지침서·계약서) ─────────
+  @Roles(...STAFF)
+  @Get("documents")
+  async documents(@Query("shipperId") sid?: string) {
+    return this.prisma.document.findMany({
+      where: { shipperId: int(sid) },
+      include: { shipper: true, _count: { select: { chunks: true } } },
+      orderBy: [{ shipperId: "asc" }, { kind: "asc" }, { version: "desc" }],
+    });
+  }
+
+  @Roles(...STAFF)
+  @Get("documents/:id")
+  async document(@Param("id", ParseIntPipe) id: number) {
+    const d = await this.prisma.document.findUnique({
+      where: { id },
+      include: { shipper: true, chunks: { orderBy: { order: "asc" }, select: { section: true, text: true } } },
+    });
+    if (!d) throw new NotFoundException();
+    return d;
+  }
+
+  /** 새 판 업로드: 현행 1개 유지, 예전 판 보관, 바뀐 조항 계산 */
+  @Roles(...OFFICE)
+  @Post("documents")
+  async upload(@Body() b: any) {
+    const shipperId = Number(b.shipperId);
+    const kind = b.kind === "CONTRACT" ? "CONTRACT" : "GUIDE";
+    const content = String(b.content ?? "");
+    const sections = splitSections(content);
+    if (!sections.length) throw new BadRequestException("'## 제N조 (조항명)' 형식의 조항을 찾지 못했습니다");
+    const title = b.title || content.match(/^#\s+(.+)$/m)?.[1]?.trim() || "문서";
+    const prev = await this.prisma.document.findFirst({
+      where: { shipperId, kind, isCurrent: true },
+      include: { chunks: { orderBy: { order: "asc" } } },
+    });
+    let changeSummary: any = null;
+    if (prev) {
+      const d = this.ai.diff(prev.chunks.map((c) => ({ section: c.section, key: (c.section.match(/\(([^)]+)\)/)?.[1] ?? c.section).replace(/\s/g, ""), text: c.text })), sections);
+      changeSummary = { fromVersion: prev.version, ...d, summary: await this.ai.summarizeDiff(d) };
+    }
+    const embeds = await this.ai.embed(sections.map((s) => `${title} ${s.section}\n${s.text}`));
+    return this.prisma.$transaction(async (tx) => {
+      await tx.document.updateMany({ where: { shipperId, kind, isCurrent: true }, data: { isCurrent: false } });
+      const version = (prev?.version ?? (await tx.document.count({ where: { shipperId, kind } }))) + 1;
+      return tx.document.create({
+        data: {
+          shipperId,
+          kind,
+          title,
+          version,
+          isCurrent: true,
+          changeSummary,
+          chunks: { create: sections.map((s, i) => ({ order: i, section: s.section, text: s.text, embedding: embeds[i] ?? [] })) },
+        },
+        select: { id: true, title: true, version: true, kind: true, changeSummary: true },
+      });
+    }, { timeout: 30000 });
+  }
+
+  // ───────── 근거 Q&A ─────────
+  @Roles(...STAFF)
+  @Post("ask")
+  async ask(@Body() b: any) {
+    const shipper = await this.prisma.shipper.findUnique({ where: { id: Number(b.shipperId) } });
+    if (!shipper) throw new BadRequestException("화주사를 고르세요");
+    if (!b.question?.trim()) throw new BadRequestException("질문을 입력하세요");
+    const cites = await this.ai.search(shipper.id, b.question);
+    const ans = await this.ai.answer(shipper.name, b.question, cites);
+    return { ...ans, shipper: shipper.name, citations: ans.found ? cites : [], aiEnabled: this.ai.enabled };
+  }
+}

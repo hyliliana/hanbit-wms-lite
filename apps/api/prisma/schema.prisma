@@ -1,0 +1,178 @@
+// 한빛물류 이천센터 · 한빛 WMS Lite DB 구조
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN // 센터장
+  MANAGER // 관리자
+  WORKER // 작업자
+  SHIPPER // 화주사 담당자
+}
+
+enum Zone {
+  AMBIENT // 상온
+  CHILLED // 냉장
+  FROZEN // 냉동
+}
+
+enum WorkStatus {
+  PLANNED
+  DONE
+}
+
+enum DamageStatus {
+  REPORTED // 보고됨(관리자 미확인)
+  CONFIRMED // 관리자 확인
+}
+
+enum DocKind {
+  GUIDE // 취급 지침서
+  CONTRACT // 보관 계약서
+}
+
+/// 화주사
+model Shipper {
+  id         Int            @id @default(autoincrement())
+  code       String         @unique
+  name       String
+  users      User[]
+  items      Item[]
+  workOrders WorkOrder[]
+  lots       StockLot[]
+  damages    DamageReport[]
+  documents  Document[]
+}
+
+/// 사용자 (역할별)
+model User {
+  id           Int            @id @default(autoincrement())
+  loginId      String         @unique
+  passwordHash String
+  name         String
+  role         Role
+  shipperId    Int?
+  shipper      Shipper?       @relation(fields: [shipperId], references: [id])
+  sessions     Session[]
+  assigned     WorkOrder[]    @relation("assignee")
+  reported     DamageReport[] @relation("reporter")
+  confirmed    DamageReport[] @relation("confirmer")
+}
+
+/// 로그인 세션
+model Session {
+  token     String   @id
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+}
+
+/// 품목
+model Item {
+  id         Int            @id @default(autoincrement())
+  shipperId  Int
+  shipper    Shipper        @relation(fields: [shipperId], references: [id])
+  sku        String
+  name       String
+  zone       Zone
+  workOrders WorkOrder[]
+  lots       StockLot[]
+  damages    DamageReport[]
+
+  @@unique([shipperId, sku])
+}
+
+/// 입고 작업지시
+model WorkOrder {
+  id          Int            @id @default(autoincrement())
+  shipperId   Int
+  shipper     Shipper        @relation(fields: [shipperId], references: [id])
+  itemId      Int
+  item        Item           @relation(fields: [itemId], references: [id])
+  expectedQty Int
+  actualQty   Int?
+  location    String
+  lotNo       String
+  expiryDate  DateTime?
+  status      WorkStatus     @default(PLANNED)
+  assigneeId  Int?
+  assignee    User?          @relation("assignee", fields: [assigneeId], references: [id])
+  note        String?
+  createdAt   DateTime       @default(now())
+  completedAt DateTime?
+  lot         StockLot?
+  damages     DamageReport[]
+}
+
+/// 재고 로트 (입고 완료 시 생성)
+model StockLot {
+  id          Int        @id @default(autoincrement())
+  shipperId   Int
+  shipper     Shipper    @relation(fields: [shipperId], references: [id])
+  itemId      Int
+  item        Item       @relation(fields: [itemId], references: [id])
+  workOrderId Int?       @unique
+  workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id])
+  location    String
+  lotNo       String
+  qty         Int
+  receivedAt  DateTime   @default(now())
+  expiryDate  DateTime?
+}
+
+/// 파손 보고
+model DamageReport {
+  id            Int          @id @default(autoincrement())
+  shipperId     Int
+  shipper       Shipper      @relation(fields: [shipperId], references: [id])
+  itemId        Int?
+  item          Item?        @relation(fields: [itemId], references: [id])
+  workOrderId   Int?
+  workOrder     WorkOrder?   @relation(fields: [workOrderId], references: [id])
+  reporterId    Int
+  reporter      User         @relation("reporter", fields: [reporterId], references: [id])
+  qty           Int          @default(1)
+  description   String
+  photo         String? // 이미지 dataURL (축소본)
+  status        DamageStatus @default(REPORTED)
+  aiGuidance    String?
+  aiCitations   Json?
+  managerNote   String?
+  confirmedById Int?
+  confirmedBy   User?        @relation("confirmer", fields: [confirmedById], references: [id])
+  confirmedAt   DateTime?
+  createdAt     DateTime     @default(now())
+}
+
+/// 문서 (지침서·계약서, 판별 보관)
+model Document {
+  id            Int        @id @default(autoincrement())
+  shipperId     Int
+  shipper       Shipper    @relation(fields: [shipperId], references: [id])
+  kind          DocKind
+  title         String
+  version       Int
+  isCurrent     Boolean    @default(true)
+  changeSummary Json?
+  createdAt     DateTime   @default(now())
+  chunks        DocChunk[]
+
+  @@unique([shipperId, kind, version])
+}
+
+/// 문서 조항 (검색 단위)
+model DocChunk {
+  id         Int      @id @default(autoincrement())
+  documentId Int
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  order      Int
+  section    String
+  text       String
+  embedding  Float[]
+}

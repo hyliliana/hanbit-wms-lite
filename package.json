@@ -1,0 +1,11 @@
+{
+  "name": "fde-studio-starter",
+  "private": true,
+  "scripts": {
+    "setup": "npm --prefix apps/api install && npm --prefix apps/web install",
+    "db:push": "npm --prefix apps/api run db:push",
+    "db:sample": "npm --prefix apps/api run db:sample",
+    "dev:api": "npm --prefix apps/api run dev",
+    "dev:web": "npm --prefix apps/web run dev"
+  }
+}
