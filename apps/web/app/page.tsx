@@ -321,6 +321,7 @@ function Manager({ api, user }: { api: Api; user: User }) {
         <button className={tab === "docs" ? "on" : ""} onClick={() => setTab("docs")}>지침서·계약서</button>
         <button className={tab === "ask" ? "on" : ""} onClick={() => setTab("ask")}>규칙 질문</button>
       </div>
+      {tab === "home" && !dash && <div className="card muted">현황을 불러오는 중...</div>}
       {tab === "home" && dash && (
         <div className="grid">
           <div className="card" onClick={() => setTab("damage")} style={{ cursor: "pointer" }}><div className="muted">미확인 파손 보고</div><div className="stat" style={{ color: dash.unconfirmedDamages ? "var(--bad)" : undefined }}>{dash.unconfirmedDamages}</div></div>
