@@ -20,6 +20,18 @@ services:
       - key: OPENAI_MODEL
         value: gpt-4o-mini
 
+  - type: web
+    name: hanbit-wms-web
+    runtime: node
+    region: singapore
+    plan: free
+    rootDir: apps/web
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        value: https://hanbit-wms-api.onrender.com
+
 databases:
   - name: hanbit-wms-db
     region: singapore
