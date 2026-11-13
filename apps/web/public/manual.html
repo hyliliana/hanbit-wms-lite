@@ -1,0 +1,712 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>한빛 WMS Lite 사용설명서</title>
+<style>
+  :root {
+    --navy: #0f5c8c;
+    --navy-dark: #0a4468;
+    --navy-soft: #e8f1f8;
+    --ink: #1d2733;
+    --muted: #5b6b7a;
+    --line: #dbe3ea;
+    --bg: #f3f6f9;
+    --card: #ffffff;
+    --ok: #1e7d4f;
+    --ok-bg: #e7f5ee;
+    --warn: #9a5b00;
+    --warn-bg: #fff5dc;
+    --bad: #b42318;
+    --bad-bg: #fdecea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --ink: #e6edf3; --muted: #9fb0bf; --line: #2c3a47; --bg: #0f1720; --card: #17222d; --navy-soft: #1b2e3d; --ok-bg: #173325; --warn-bg: #3a2c12; --bad-bg: #3b1d1b; }
+  }
+  :root[data-theme="dark"] { --ink: #e6edf3; --muted: #9fb0bf; --line: #2c3a47; --bg: #0f1720; --card: #17222d; --navy-soft: #1b2e3d; --ok-bg: #173325; --warn-bg: #3a2c12; --bad-bg: #3b1d1b; }
+
+  * { box-sizing: border-box; word-break: keep-all; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    font-size: 16px;
+    line-height: 1.7;
+    word-break: keep-all;
+  }
+  .page { max-width: 860px; margin: 0 auto; padding: 24px 16px 56px; }
+  a { color: var(--navy); }
+  code, pre, .url { overflow-wrap: anywhere; word-break: break-all; }
+
+  h1, h2, h3, h4 { line-height: 1.35; margin: 0; color: var(--ink); }
+  h2 { font-size: 24px; color: var(--navy-dark); margin-bottom: 14px; padding-bottom: 8px; border-bottom: 3px solid var(--navy); page-break-after: avoid; }
+  h3 { font-size: 19px; margin: 26px 0 10px; color: var(--navy); page-break-after: avoid; }
+  h4 { font-size: 16px; margin: 18px 0 8px; page-break-after: avoid; }
+  p { margin: 8px 0; }
+  .muted { color: var(--muted); }
+  .lead { font-size: 17px; color: var(--ink); }
+
+  section.main { margin-top: 36px; }
+  section.main + section.main { margin-top: 44px; }
+
+  /* 표지 */
+  .cover { background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%); color: #fff; border-radius: 16px; padding: 40px 28px 30px; }
+  .cover .eyebrow { font-size: 14px; opacity: .85; letter-spacing: .02em; }
+  .cover h1 { color: #fff; font-size: 34px; margin: 10px 0 8px; }
+  .cover .sub { font-size: 18px; margin: 0 0 22px; opacity: .95; }
+  .cover .meta { font-size: 14px; opacity: .9; }
+  .cover .meta span { display: inline-block; margin: 2px 14px 2px 0; }
+
+  .toc { background: var(--card); color: var(--ink); border-radius: 12px; padding: 18px 20px; margin-top: 18px; border: 1px solid var(--line); }
+  .toc h3 { margin: 0 0 8px; font-size: 17px; }
+  .toc ol { margin: 0; padding-left: 0; list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 18px; }
+  .toc li a { text-decoration: none; color: var(--ink); display: block; padding: 6px 8px; border-radius: 8px; }
+  .toc li a:hover { background: var(--navy-soft); }
+  .toc li b { color: var(--navy); margin-right: 6px; }
+
+  /* 카드·콜아웃 */
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin: 12px 0; box-shadow: 0 1px 2px rgba(15,40,60,.05); break-inside: avoid; page-break-inside: avoid; }
+  .card h4 { margin-top: 0; }
+  .point { display: grid; grid-template-columns: 36px 1fr; gap: 12px; align-items: start; }
+  .point .num { width: 36px; height: 36px; border-radius: 50%; background: var(--navy); color: #fff; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .point b { font-size: 17px; }
+  .callout { border-left: 5px solid var(--navy); background: var(--navy-soft); border-radius: 10px; padding: 12px 16px; margin: 14px 0; break-inside: avoid; page-break-inside: avoid; }
+  .callout.warn { border-left-color: var(--warn); background: var(--warn-bg); }
+  .callout.bad { border-left-color: var(--bad); background: var(--bad-bg); }
+  .callout.ok { border-left-color: var(--ok); background: var(--ok-bg); }
+  .callout b:first-child { display: block; margin-bottom: 2px; }
+
+  /* 화면 요소 이름 (실제 버튼·탭 라벨) */
+  .ui-btn { display: inline-block; border: 1.5px solid var(--navy); color: var(--navy); background: var(--card); border-radius: 8px; padding: 0 8px; font-weight: 600; font-size: 15px; line-height: 1.7; white-space: nowrap; }
+  .ui-btn.solid { background: var(--navy); color: #fff; }
+  .ui-btn.danger { border-color: var(--bad); color: var(--bad); }
+  .ui-tab { display: inline-block; background: var(--navy-soft); color: var(--navy-dark); border-radius: 999px; padding: 0 10px; font-weight: 600; font-size: 14px; line-height: 1.7; white-space: nowrap; }
+  .ui-field { display: inline-block; border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; background: var(--bg); font-size: 14px; }
+  .chip { display: inline-block; font-size: 13px; padding: 0 8px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); color: var(--muted); margin-right: 4px; font-weight: 600; }
+  .chip.ok { background: var(--ok-bg); color: var(--ok); border-color: transparent; }
+  .chip.warn { background: var(--warn-bg); color: var(--warn); border-color: transparent; }
+  .chip.bad { background: var(--bad-bg); color: var(--bad); border-color: transparent; }
+
+  /* 단계 목록 */
+  ol.steps { counter-reset: st; list-style: none; padding: 0; margin: 10px 0; }
+  ol.steps > li { counter-increment: st; position: relative; padding: 8px 0 8px 44px; border-bottom: 1px dashed var(--line); break-inside: avoid; page-break-inside: avoid; }
+  ol.steps > li:last-child { border-bottom: none; }
+  ol.steps > li::before { content: counter(st); position: absolute; left: 0; top: 9px; width: 30px; height: 30px; border-radius: 50%; background: var(--navy); color: #fff; font-weight: 700; display: flex; align-items: center; justify-content: center; font-size: 15px; }
+  ol.steps ul { margin: 4px 0 0; padding-left: 18px; }
+  ol.steps ul li { margin: 2px 0; }
+
+  ul.dots { padding-left: 20px; margin: 8px 0; }
+  ul.dots li { margin: 4px 0; }
+
+  /* 표 */
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 15px; background: var(--card); break-inside: avoid; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--navy-soft); color: var(--navy-dark); font-weight: 700; }
+  tr { break-inside: avoid; page-break-inside: avoid; }
+
+  /* 흐름도 */
+  .flow { display: flex; flex-direction: column; align-items: stretch; gap: 0; margin: 14px 0; break-inside: avoid; page-break-inside: avoid; }
+  .flow .box { background: var(--card); border: 2px solid var(--navy); border-radius: 12px; padding: 10px 12px; text-align: left; }
+  .flow .box b { display: block; color: var(--navy-dark); font-size: 15px; }
+  .flow .box span { font-size: 14px; color: var(--muted); }
+  .flow .box.ok { border-color: var(--ok); }
+  .flow .box.ok b { color: var(--ok); }
+  .flow .box.warn { border-color: var(--warn); }
+  .flow .box.warn b { color: var(--warn); }
+  .flow .box.bad { border-color: var(--bad); }
+  .flow .box.bad b { color: var(--bad); }
+  .flow .arr { align-self: center; color: var(--navy); font-size: 22px; font-weight: 700; line-height: 1; padding: 4px 0; }
+  .flow .arr::before { content: "▼"; }
+  .branch { display: grid; grid-template-columns: 1fr; gap: 8px; margin: 4px 0 8px; }
+  .branch .box { background: var(--card); border: 2px dashed var(--navy); border-radius: 12px; padding: 10px 12px; }
+  .branch .box b { display: block; color: var(--navy-dark); font-size: 15px; }
+  .branch .box span { font-size: 14px; color: var(--muted); }
+  .fork-label { text-align: center; font-size: 14px; color: var(--navy); font-weight: 700; margin: 2px 0; }
+
+  pre.sample { background: #0f1b26; color: #e9f1f7; border-radius: 10px; padding: 14px 16px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; margin: 10px 0; break-inside: avoid; }
+
+  .faq .q { font-weight: 700; color: var(--navy-dark); font-size: 17px; margin: 0 0 6px; }
+  .faq .a { margin: 0; }
+
+  .footer { margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+
+  /* 화면 폭이 넓을 때: 흐름도를 가로로 */
+  @media (min-width: 720px) {
+    .flow { flex-direction: row; flex-wrap: nowrap; align-items: stretch; gap: 6px; }
+    .flow .box { flex: 1 1 0; min-width: 0; }
+    .flow .arr { align-self: center; padding: 0; }
+    .flow .arr::before { content: "→"; }
+    .branch { grid-template-columns: 1fr 1fr 1fr; }
+    .point { grid-template-columns: 40px 1fr; }
+    .cover h1 { font-size: 40px; }
+  }
+  @media (max-width: 560px) {
+    .toc ol { grid-template-columns: 1fr; }
+    .cover { padding: 30px 20px 24px; }
+    .cover h1 { font-size: 28px; }
+    h2 { font-size: 21px; }
+  }
+
+  /* 인쇄 (A4 PDF) */
+  @page { size: A4; margin: 14mm; }
+  @media print {
+    body { background: #fff; color: #000; font-size: 11pt; line-height: 1.55; }
+    .page { max-width: none; padding: 0; }
+    .card, .callout, .flow, .branch, table, tr, ol.steps > li, pre.sample { break-inside: avoid; page-break-inside: avoid; }
+    section.main { page-break-before: always; margin-top: 0; }
+    section.cover { page-break-after: auto; }
+    section.main + section.main { margin-top: 0; }
+    h2, h3, h4 { break-after: avoid; page-break-after: avoid; }
+    .cover { background: var(--navy) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .flow .box, .branch .box, .callout, .card, .chip, .ui-btn, .ui-tab, th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .toc li a { color: #000; }
+    a { color: var(--navy); text-decoration: none; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+<!-- ───────── 1. 표지 ───────── -->
+<section class="cover" id="cover">
+  <div class="eyebrow">한빛물류 이천센터 · 사용설명서 · 인수인계서</div>
+  <h1>한빛 WMS Lite 사용설명서</h1>
+  <p class="sub">회사마다 다른 창고 규칙, 휴대폰으로 바로 확인해요</p>
+  <div class="meta">
+    <span>작성일 2026-11-13</span>
+    <span>대상: 작업자 · 관리자 · 센터장 · 화주사 담당자 · 운영 담당자</span>
+  </div>
+</section>
+
+<nav class="toc card" aria-label="목차">
+  <h3>목차</h3>
+  <ol>
+    <li><a href="#summary"><b>1</b>한 장 요약</a></li>
+    <li><a href="#start"><b>2</b>시작하기</a></li>
+    <li><a href="#roles"><b>3</b>역할별 사용법</a></li>
+    <li><a href="#flows"><b>4</b>업무 흐름 3가지</a></li>
+    <li><a href="#faq"><b>5</b>자주 묻는 질문</a></li>
+    <li><a href="#handover"><b>6</b>인수인계 (운영 담당자용)</a></li>
+  </ol>
+</nav>
+
+<!-- ───────── 2. 한 장 요약 ───────── -->
+<section class="main" id="summary">
+  <h2>1. 한 장 요약</h2>
+  <p class="lead">한빛 WMS Lite는 화주사마다 다른 입고·파손·보관 규칙을 현장에서 바로 찾고, 지키고, 기록하도록 돕는 앱입니다. 이번에 센터에서 달라지는 점은 아래 여섯 가지입니다.</p>
+
+  <div class="card point"><div class="num">1</div><div><b>화주사 규칙을 휴대폰으로 바로 찾습니다.</b><p class="muted">질문하면 그 화주사의 현행 지침서·계약서에서 답을 찾고, 근거 조항(문서명 · 판 · 조항명)을 함께 보여 줍니다.</p></div></div>
+  <div class="card point"><div class="num">2</div><div><b>파손은 사진과 함께 바로 보고되고, 30분 넘게 확인이 없으면 알림이 뜹니다.</b><p class="muted">사진과 입고 물건이 있어야 보고할 수 있습니다. 발견 시각은 보고 누른 순간 자동으로 기록됩니다. 30분을 넘긴 미확인 건은 센터장 화면 맨 위에 빨간 알림으로 표시됩니다.</p></div></div>
+  <div class="card point"><div class="num">3</div><div><b>화주사 통보 기한을 자동으로 계산합니다.</b><p class="muted">지침서의 파손 조항에 적힌 "N시간 안" 또는 "당일 안"을 읽어 통보 마감 시각을 보여 줍니다. 지침서에 기한이 없으면 임의로 정하지 않고 "관리자 판단"으로 표시합니다.</p></div></div>
+  <div class="card point"><div class="num">4</div><div><b>지침서가 바뀌면 바뀐 조항만 알려 주고, 작업자가 '읽었습니다'로 확인합니다.</b><p class="muted">새 판을 올리면 추가·변경·삭제된 조항을 보여 줍니다. 작업자는 판마다 한 번만 확인하면 됩니다.</p></div></div>
+  <div class="card point"><div class="num">5</div><div><b>지침서에 없는 질문은 사람을 거쳐 답합니다.</b><p class="muted">작업자 → 관리자 → (필요하면) 화주사 순서로 묻고, 답은 다시 관리자를 거쳐 작업자에게 전달됩니다. 저장된 답은 같은 질문이 올 때 '센터 답변'으로 다시 나옵니다.</p></div></div>
+  <div class="card point"><div class="num">6</div><div><b>화주사는 자기 회사 물건만 봅니다.</b><p class="muted">자기 회사의 재고·입고 내역·파손 보고를 볼 수 있고, 센터가 보낸 문의에 답할 수 있습니다. 보관 위치, 작업자 이름, 센터 메모, 계약 내용은 보이지 않습니다.</p></div></div>
+
+  <div class="callout warn">
+    <b>꼭 기억해 주세요</b>
+    AI가 찾아 준 답은 참고용입니다. 항상 아래 근거 조항 원문을 확인하세요. 파손 책임과 최종 처리는 관리자·센터장이 판단합니다. 시스템은 화주사에 자동으로 연락하지 않습니다.
+  </div>
+</section>
+
+<!-- ───────── 3. 시작하기 ───────── -->
+<section class="main" id="start">
+  <h2>2. 시작하기</h2>
+
+  <h4>접속 주소</h4>
+  <div class="card">
+    <p><span class="url"><a href="https://hanbit-wms-web.onrender.com">https://hanbit-wms-web.onrender.com</a></span></p>
+    <ul class="dots">
+      <li><b>작업자</b>는 <b>휴대폰</b>으로 여세요.</li>
+      <li><b>관리자 · 센터장 · 화주사 담당자</b>는 <b>PC</b>로 여세요. (화주사 담당자는 휴대폰으로도 볼 수 있습니다.)</li>
+    </ul>
+  </div>
+
+  <div class="callout">
+    <b>첫 접속은 1분 정도 기다려 주세요</b>
+    무료 서버는 한동안 쓰지 않으면 잠들어 있습니다. 처음 열 때 깨어나는 동안 화면이 조금 늦게 뜹니다. 멈춘 것 같아도 기다려 주세요.
+  </div>
+
+  <h4>로그인</h4>
+  <ol class="steps">
+    <li>접속 주소를 엽니다.</li>
+    <li><span class="ui-field">아이디</span>와 <span class="ui-field">비밀번호</span> 칸에 입력한 뒤 <span class="ui-btn solid">로그인</span>을 누릅니다.</li>
+    <li>로그인 화면 아래 <span class="ui-tab">시연용 계정</span> 목록의 이름 버튼을 누르면 아이디가 자동으로 채워집니다. 비밀번호는 별도로 전달받으세요.</li>
+    <li>화면 맨 위 오른쪽의 <span class="ui-btn">로그아웃</span>으로 나갈 수 있습니다. 로그인한 뒤 12시간이 지나면 자동으로 로그아웃됩니다.</li>
+  </ol>
+
+  <h4>시연용 계정과 역할</h4>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>아이디</th><th>화면에 보이는 이름</th><th>역할</th><th>주로 쓰는 기기</th></tr></thead>
+      <tbody>
+        <tr><td>center</td><td>센터장</td><td>센터장</td><td>PC</td></tr>
+        <tr><td>choi</td><td>관리자 1</td><td>관리자</td><td>PC</td></tr>
+        <tr><td>kim</td><td>관리자 2</td><td>관리자</td><td>PC</td></tr>
+        <tr><td>jang</td><td>작업자 A (냉장)</td><td>작업자</td><td>휴대폰</td></tr>
+        <tr><td>nguyen</td><td>작업자 B (냉동)</td><td>작업자</td><td>휴대폰</td></tr>
+        <tr><td>fresh</td><td>신선마켓 담당자</td><td>화주사 담당자</td><td>PC · 휴대폰</td></tr>
+        <tr><td>beauty</td><td>루미코스메틱 담당자</td><td>화주사 담당자</td><td>PC · 휴대폰</td></tr>
+        <tr><td>frozen</td><td>한겨울푸드 담당자</td><td>화주사 담당자</td><td>PC · 휴대폰</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="muted">시연용 계정의 비밀번호는 이 문서에 적지 않았습니다. 운영 담당자에게 따로 받으세요.</p>
+  <p class="muted">로그인하면 역할에 따라 보이는 화면이 달라집니다. 작업자는 아래 네 개 탭, 관리자·센터장은 일곱 개 탭, 화주사 담당자는 네 개 탭을 봅니다.</p>
+</section>
+
+<!-- ───────── 4. 역할별 사용법 ───────── -->
+<section class="main" id="roles">
+  <h2>3. 역할별 사용법</h2>
+  <p class="muted">아래 번호 순서대로 따라 하시면 됩니다. 버튼과 탭의 이름은 화면에 적힌 그대로 적었습니다.</p>
+
+  <!-- 작업자 -->
+  <h3>📱 작업자 (휴대폰)</h3>
+  <p>하는 일: 내 입고 작업 확인과 완료, 파손 보고, 화주사 규칙 질문, 지침서 개정 확인.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>탭 이름</th><th>무엇을 하나요</th></tr></thead>
+      <tbody>
+        <tr><td><span class="ui-tab">내 작업</span></td><td>오늘 할 입고 작업, 개정 알림, 완료한 작업</td></tr>
+        <tr><td><span class="ui-tab">파손 보고</span></td><td>파손을 사진과 함께 관리자에게 보고</td></tr>
+        <tr><td><span class="ui-tab">규칙 질문</span></td><td>화주사 규칙을 질문하고 근거 조항 확인</td></tr>
+        <tr><td><span class="ui-tab">내 질문</span></td><td>관리자에게 보낸 질문의 답 확인</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h4>A. 오늘 할 일 확인하기 (탭: <span class="ui-tab">내 작업</span>)</h4>
+    <ol class="steps">
+      <li>휴대폰으로 접속 주소를 열고 로그인합니다.</li>
+      <li>맨 위 탭 <span class="ui-tab">내 작업 N</span>에서 남은 입고 작업을 봅니다. 카드에는 화주사, 품목, 로트 번호, 보관 위치, 예정 수량, 유통기한이 있습니다.</li>
+      <li>카드 맨 위에 노란 알림 상자(📢 "○○ 지침서 제N판으로 바뀌었습니다")가 있으면 내용을 읽고 <span class="ui-btn">읽었습니다</span>를 누릅니다. 한 번 누르면 "읽음 확인 시각"이 표시되고, 같은 판은 다시 누를 필요가 없습니다.</li>
+      <li>작업 카드의 <span class="ui-btn">○○ 입고 주의사항 보기</span>를 누르면 그 화주사 현행 지침서의 입고·검수·수량·온도·파손 조항 원문이 펼쳐집니다. 닫을 때는 <span class="ui-btn">주의사항 닫기</span>를 누릅니다.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h4>B. 입고 완료하기 (탭: <span class="ui-tab">내 작업</span>)</h4>
+    <ol class="steps">
+      <li>작업 카드의 <span class="ui-field">실제 받은 수량</span> 칸(안내 문구: 세어 본 수량)에 실제로 센 숫자를 입력합니다. 0개면 0을 입력합니다.</li>
+      <li><span class="ui-btn solid">입고 완료</span>를 누릅니다.</li>
+      <li>화면 메시지를 확인합니다.
+        <ul>
+          <li>"수량 일치"라고 나오면 그대로 끝입니다.</li>
+          <li>"예정과 +N개 차이 → 관리자에게 표시됩니다"라고 나와도 <b>센 숫자를 고치지 마세요.</b> 차이는 관리자 화면에 자동으로 표시됩니다.</li>
+        </ul>
+      </li>
+      <li>끝난 작업은 아래 <b>완료한 작업</b> 목록에 최근 5건까지 보입니다.</li>
+    </ol>
+    <p class="muted">실제 수량을 넣지 않으면 완료되지 않습니다.</p>
+  </div>
+
+  <div class="card">
+    <h4>C. 파손 보고하기 (탭: <span class="ui-tab">파손 보고</span>, 또는 작업 카드의 <span class="ui-btn danger">파손 있음</span>)</h4>
+    <ol class="steps">
+      <li>파손된 물건이 있는 작업 카드에서 <span class="ui-btn danger">파손 있음</span>을 누릅니다. 그러면 그 입고 건(품목·로트·위치·예정 수량)이 자동으로 연결됩니다. 탭 <span class="ui-tab">파손 보고</span>에서 직접 고를 수도 있습니다.</li>
+      <li><span class="ui-field">화주사</span>를 고릅니다. (연결된 건이면 자동으로 맞춰집니다.)</li>
+      <li><span class="ui-field">입고 물건 (필수)</span>에서 품목을 고릅니다. 연결된 건이면 이미 정해져 있습니다.</li>
+      <li><span class="ui-field">박스 라벨/송장 번호 (선택)</span>이 있으면 적습니다.</li>
+      <li><span class="ui-field">파손 수량 (박스)</span>에 몇 박스인지 적습니다. 기본값은 1입니다.</li>
+      <li><span class="ui-field">어떤 파손인가요</span>에 상황을 적습니다. 예: "박스 한쪽이 젖어 있고 바닥이 눌렸음"</li>
+      <li><span class="ui-field">사진 (필수)</span>에서 사진을 찍거나 고릅니다. 사진은 자동으로 작게 줄어서 저장됩니다.</li>
+      <li><span class="ui-btn solid danger">관리자에게 바로 보고</span>를 누릅니다. 화주사, 물건, 설명, 사진이 모두 있어야 버튼이 켜집니다. 누르면 "보내는 중... (지침 찾는 중)"이 잠깐 나옵니다.</li>
+      <li>보고가 끝나면 그 화주사의 파손 처리 방법(근거 조항 포함)과 <b>화주사 통보 마감 시각·남은 시간</b>이 나옵니다. 읽고 <span class="ui-btn">확인</span>을 누릅니다.</li>
+    </ol>
+    <div class="callout">
+      <b>발견 시각은 자동으로 기록됩니다</b>
+      따로 입력하지 않아도 보고를 누른 시각이 발견 시각으로 저장됩니다. 최종 처리는 관리자가 확인한 뒤에 정해집니다.
+    </div>
+  </div>
+
+  <div class="card">
+    <h4>D. 규칙 질문하기 (탭: <span class="ui-tab">규칙 질문</span>)</h4>
+    <ol class="steps">
+      <li><span class="ui-field">화주사</span>를 고릅니다. 화주사를 고르기 전에는 질문을 보낼 수 없습니다.</li>
+      <li>자주 찾는 질문 버튼(파손된 박스가 입고되면 어떻게 처리하나요 / 보관 온도 범위 / 출고 순서) 중 하나를 누르거나, <span class="ui-field">질문</span> 칸에 상황을 적습니다. 예: "박스가 젖은 채로 입고됐어요. 어떻게 해야 하나요?"</li>
+      <li><span class="ui-btn solid">질문하기</span>를 누릅니다. 잠시 뒤 답이 나옵니다.</li>
+      <li>답 아래의 <b>[1] [2]</b> 근거를 꼭 확인합니다. 근거에는 문서 이름, 제N판, 조항명과 원문이 함께 있습니다.</li>
+      <li>센터 답변이 있으면 "센터 답변" 표시와 함께 확인 날짜가 나옵니다. <span class="chip warn">지침 개정 후 재확인 필요</span> 표시가 있으면 관리자에게 먼저 확인하세요.</li>
+      <li>근거를 찾지 못했다고 나오면 <span class="ui-btn solid">관리자에게 확인 요청</span>을 누릅니다. 보낸 뒤에는 "관리자에게 확인 요청을 보냈습니다"가 나옵니다.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h4>E. 내 질문 확인하기 (탭: <span class="ui-tab">내 질문</span>)</h4>
+    <ol class="steps">
+      <li>보낸 질문마다 상태가 보입니다. <span class="chip warn">관리자 확인 중</span> → <span class="chip ok">답변 완료</span></li>
+      <li>답변이 완료되면 답과 출처(관리자 답변, 또는 화주사 확인 날짜)가 보입니다.</li>
+      <li>화면은 10초마다 자동으로 새로 고쳐집니다.</li>
+    </ol>
+    <p class="muted">작업자 화면에는 화주사와 주고받은 내용은 보이지 않습니다. 최종 답만 보입니다.</p>
+  </div>
+
+  <!-- 관리자 -->
+  <h3>💻 관리자 (PC)</h3>
+  <p>하는 일: 파손 확인과 화주사 통보 기록, 입고 등록과 수량 차이 확인, 재고 확인, 지침서·계약서 새 판 올리기, 질문 처리.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>탭 이름</th><th>무엇을 하나요</th></tr></thead>
+      <tbody>
+        <tr><td><span class="ui-tab">요약</span></td><td>미확인 파손, 기한 지난 파손, 수량 차이 등 숫자 카드</td></tr>
+        <tr><td><span class="ui-tab">파손함</span></td><td>파손 보고 확인, 화주사 통보 기록</td></tr>
+        <tr><td><span class="ui-tab">입고·수량 차이</span></td><td>입고 예정 등록, 입고 내역과 수량 차이</td></tr>
+        <tr><td><span class="ui-tab">재고</span></td><td>화주사별 재고 확인</td></tr>
+        <tr><td><span class="ui-tab">지침서·계약서</span></td><td>새 판 올리기, 바뀐 조항 비교, 작업자 읽음 현황</td></tr>
+        <tr><td><span class="ui-tab">질문함</span></td><td>작업자 질문 처리, 화주사 문의, 센터 답변 저장</td></tr>
+        <tr><td><span class="ui-tab">규칙 질문</span></td><td>작업자와 같은 방식으로 규칙 질문</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="muted">탭에 빨간 숫자 배지가 붙으면 처리할 건이 있다는 뜻입니다.</p>
+
+  <div class="card">
+    <h4>A. 요약 보기 (탭: <span class="ui-tab">요약</span>)</h4>
+    <ol class="steps">
+      <li>로그인하면 <span class="ui-tab">요약</span>이 먼저 열립니다. 카드 다섯 개를 봅니다: <span class="ui-field">N분 넘게 확인 안 된 파손</span>, <span class="ui-field">화주사 통보 기한 지난 파손</span>, <span class="ui-field">미확인 파손 보고</span>, <span class="ui-field">수량 차이 입고</span>, <span class="ui-field">대기 중 입고 작업</span>.</li>
+      <li>화면 위쪽에 빨간 띠가 뜨면 30분을 넘긴 미확인 파손이 있다는 뜻입니다. 띠를 누르면 <span class="ui-tab">파손함</span>으로 바로 이동합니다.</li>
+      <li>숫자 카드를 누르면 해당 탭으로 이동합니다. 화면은 10초마다 새로 고쳐집니다.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h4>B. 파손 확인하고 화주사 통보 기록하기 (탭: <span class="ui-tab">파손함</span>)</h4>
+    <ol class="steps">
+      <li>미확인 건은 빨간 테두리로 보입니다. <span class="chip bad">보고 후 N분</span> 칩이 30분을 넘으면 빨간색으로 바뀝니다.</li>
+      <li>사진, 설명, 입고 물건, 작업 카드 정보(로트·위치·예정 수량)를 확인합니다.</li>
+      <li><b>지침서 기준 처리 방법 (AI가 찾은 근거)</b>과 근거 조항을 읽습니다.</li>
+      <li><b>화주사 통보 마감</b> 시각과 남은 시간을 확인합니다. "기한 없음 · 관리자 판단"이면 계약과 지침서를 보고 관리자가 직접 정합니다.</li>
+      <li>처리 메모 칸(예: "격리 칸 이동, 화주사 통보 완료")에 처리 내용을 적습니다.</li>
+      <li>이미 화주사에 알렸다면 <span class="ui-field">화주사에 통보함</span>을 체크합니다.</li>
+      <li><span class="ui-btn solid">확인 처리</span>를 누릅니다. 확인 처리는 한 번만 할 수 있습니다.</li>
+      <li>통보를 아직 하지 않았다면, 확인 뒤에 해당 건에서 <span class="ui-btn">화주사 통보 완료 기록</span>을 눌러 나중에 기록할 수 있습니다.</li>
+    </ol>
+    <div class="callout warn">
+      <b>시스템이 하지 않는 일</b>
+      화주사에 연락하거나, 격리·반송 같은 실제 처리를 실행하지 않습니다. 실제 통보와 처리는 사람이 하고, 그 내용을 메모와 통보 기록으로 남깁니다.
+    </div>
+  </div>
+
+  <div class="card">
+    <h4>C. 입고 등록과 수량 차이 확인 (탭: <span class="ui-tab">입고·수량 차이</span>)</h4>
+    <ol class="steps">
+      <li>입고 예정을 만들려면 <span class="ui-field">화주사</span> → <span class="ui-field">품목</span> → <span class="ui-field">예정 수량</span> → <span class="ui-field">보관 위치</span>(예: C-01-04) 순서로 고릅니다. <span class="ui-field">유통기한</span>은 있을 때만 적습니다.</li>
+      <li><span class="ui-btn solid">작업지시 만들기</span>를 누릅니다. 예정 수량은 1 이상의 정수, 보관 위치는 필수입니다.</li>
+      <li>만든 작업은 작업자의 <span class="ui-tab">내 작업</span>에 나타납니다. 특정 작업자를 지정하는 화면은 아직 없고, 먼저 완료한 작업자에게 배정됩니다.</li>
+      <li>아래 <b>입고 내역</b> 표에서 예정·실제·차이를 봅니다. 차이가 있는 행은 빨갛게 표시됩니다.</li>
+      <li>차이 건만 보려면 <span class="ui-field">수량 차이만</span>을 체크합니다.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h4>D. 재고 보기 (탭: <span class="ui-tab">재고</span>)</h4>
+    <ol class="steps">
+      <li>상단 선택 칸에서 <b>전체 화주사</b> 또는 특정 화주사를 고릅니다.</li>
+      <li>품목, 구역(상온·냉장·냉동), 위치, 로트 번호, 수량, 입고일, 유통기한을 봅니다. 유통기한이 가까운 순으로 나옵니다.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h4>E. 지침서·계약서 새 판 올리기와 바뀐 조항 보기 (탭: <span class="ui-tab">지침서·계약서</span>)</h4>
+    <ol class="steps">
+      <li><span class="ui-field">화주사</span>와 <span class="ui-field">종류</span>(취급 지침서 / 보관 계약서)를 고릅니다.</li>
+      <li><span class="ui-field">파일</span>에서 텍스트 파일(.md 또는 .txt)을 고릅니다. PDF는 올릴 수 없으니 텍스트로 바꾼 뒤 올리세요.</li>
+      <li>파일 이름과 글자 수가 보이면 <span class="ui-btn solid">올리고 비교하기</span>를 누릅니다. "분석 중..."이 잠시 나옵니다.</li>
+      <li>결과 화면에서 <b>제N판 → 제M판 · 변경 · 추가 · 삭제</b> 개수, 요약, 조항별 전·후 원문을 확인합니다.</li>
+      <li>새 판이 현행이 되고 예전 판은 <span class="chip">보관</span>으로 남습니다.</li>
+      <li>아래 <b>문서 목록</b>에서 <span class="ui-btn">보기</span>를 누르면 <b>작업자 읽음 확인 N/전체명</b>과 작업자별 확인 시각을 볼 수 있습니다. 끝나면 <span class="ui-btn">닫기</span>.</li>
+    </ol>
+    <div class="callout">
+      <b>파일 형식 주의</b>
+      조항은 반드시 <code>## 제N조 (조항명)</code> 형식이어야 합니다. 이 형식이 없으면 "조항 형식을 찾지 못했습니다"라며 올라가지 않습니다.
+    </div>
+  </div>
+
+  <div class="card">
+    <h4>F. 질문함 처리하기 (탭: <span class="ui-tab">질문함</span>)</h4>
+    <p class="muted">질문 카드에 보이는 상태: <span class="chip bad">새 질문</span> <span class="chip warn">화주사 답 대기</span> <span class="chip warn">화주사 답 도착</span> <span class="chip ok">전달 완료</span></p>
+    <ol class="steps">
+      <li>작업자가 보낸 질문 카드를 읽습니다. <span class="chip bad">새 질문</span>은 빨간 테두리로 보입니다.</li>
+      <li>질문에 안전·보관·계약과 관련된 말이 있으면 <span class="ui-field">화주사 확인 필요</span> 체크가 자동으로 켜집니다. 필요하면 직접 켜거나 끌 수 있습니다.</li>
+      <li>처리 방법을 고릅니다.
+        <ul>
+          <li><span class="ui-btn">바로 답변</span>: 관리자 판단으로 답을 적고 <span class="ui-btn solid">바로 답변</span>을 누르면 작업자에게 바로 전달됩니다. 화주사 확인이 필요한 질문이면 화면에서 먼저 화주사 확인을 권합니다.</li>
+          <li><span class="ui-btn">화주사에 문의</span>: 화주사에 보낼 문장을 다듬고 <span class="ui-btn solid">화주사에 문의</span>를 누릅니다. 화주사에는 문의 내용만 가고 작업자 이름은 가지 않습니다.</li>
+          <li><span class="ui-btn">외부 확인 기록</span>: 전화나 메일로 화주사에 직접 확인했을 때 씁니다. <span class="ui-field">확인 방법</span>(전화·메일·메신저·방문), <span class="ui-field">확인 날짜</span>, <span class="ui-field">화주사가 알려 준 내용</span>을 적고 <span class="ui-btn solid">외부 확인 기록</span>을 누릅니다.</li>
+        </ul>
+      </li>
+      <li>화주사 답이 도착하면 카드에 <span class="chip warn">화주사 답 도착</span>이 붙습니다. 답을 확인하고 다듬은 뒤 <span class="ui-btn solid">작업자에게 전달</span>을 누릅니다.</li>
+      <li>전달이 끝나면 <span class="ui-btn">센터 답변으로 저장</span>을 누릅니다. 저장된 답은 같은 화주사에 같은 질문이 올 때 작업자의 규칙 질문 화면에 "센터 답변"으로 나옵니다.</li>
+      <li>화면 아래 <b>저장된 센터 답변</b>에서 <span class="chip warn">지침 개정 후 재확인 필요</span> 표시가 붙은 답은 내용을 확인한 뒤 <span class="ui-btn">재확인 완료</span>를 누릅니다.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h4>G. 규칙 질문 (탭: <span class="ui-tab">규칙 질문</span>)</h4>
+    <p>작업자의 규칙 질문과 같은 방식입니다. 근거가 없으면 <span class="ui-btn solid">관리자에게 확인 요청</span>이 나오는데, 관리자가 누르면 그 질문이 바로 <span class="ui-tab">질문함</span>에 들어갑니다.</p>
+  </div>
+
+  <!-- 센터장 -->
+  <h3>💻 센터장 (PC)</h3>
+  <p>센터장 계정은 관리자와 <b>같은 화면과 같은 기능</b>을 씁니다. 다른 점은 맨 위 알림 문구뿐입니다. 센터장은 아래 흐름에 집중하면 됩니다.</p>
+  <div class="card">
+    <h4>센터장이 주로 보는 것</h4>
+    <ol class="steps">
+      <li><span class="ui-tab">요약</span>의 맨 위 빨간 띠를 확인합니다. 센터장에게는 <b>"🔔 센터장 알림: N분 넘게 확인 안 된 파손 N건 — 관리자 확인이 늦어지고 있습니다"</b>로 표시됩니다.</li>
+      <li>띠를 누르면 <span class="ui-tab">파손함</span>으로 이동합니다. 아직 확인되지 않은 건을 관리자와 함께 확인합니다.</li>
+      <li><span class="ui-field">화주사 통보 기한 지난 파손</span> 카드를 확인합니다. 기한을 넘긴 통보는 계약서상 늘어난 손해를 센터가 부담할 수 있어, 해당 건에는 붉은 경고가 표시됩니다.</li>
+      <li><span class="ui-tab">지침서·계약서</span>에서 새 판을 올린 뒤 <b>작업자 읽음 현황</b>을 확인합니다.</li>
+      <li><span class="ui-tab">질문함</span>에서 <span class="ui-field">화주사 확인 필요</span> 표시가 붙은 질문을 관리자와 함께 봅니다.</li>
+    </ol>
+    <div class="callout">
+      <b>현재 화면의 특징</b>
+      센터장 전용으로 따로 나뉜 기능은 아직 없습니다. 센터장과 관리자는 같은 권한을 씁니다. 알림 문구만 센터장용으로 다릅니다.
+    </div>
+  </div>
+
+  <!-- 화주사 -->
+  <h3>💻 화주사 (PC · 휴대폰)</h3>
+  <p>하는 일: 자기 회사 재고와 입고 내역 확인, 파손 보고 현황 확인, 센터가 보낸 문의에 답하기. 자기 회사 물건만 보이며, 다른 화주사 정보는 서버가 막습니다.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>탭 이름</th><th>무엇을 하나요</th><th>볼 수 없는 것</th></tr></thead>
+      <tbody>
+        <tr><td><span class="ui-tab">내 재고</span></td><td>품목, 구역, 로트, 수량, 입고일, 유통기한</td><td>보관 위치</td></tr>
+        <tr><td><span class="ui-tab">입고 내역</span></td><td>품목, 예정 수량, 실제 수량, 차이, 완료 시각</td><td>보관 위치, 작업자, 센터 메모</td></tr>
+        <tr><td><span class="ui-tab">파손 보고</span></td><td>파손 내용, 사진, 센터 확인 상태, 센터 통보 시각</td><td>센터 메모, 확인자, 내부 처리 지침</td></tr>
+        <tr><td><span class="ui-tab">센터 문의함</span></td><td>센터가 보낸 문의에 답하기</td><td>작업자 이름, 원래 질문</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h4>A. 재고와 입고 내역 보기</h4>
+    <ol class="steps">
+      <li><span class="ui-tab">내 재고</span>에서 자기 회사 재고를 봅니다.</li>
+      <li><span class="ui-tab">입고 내역</span>에서 예정 수량과 실제 수량을 비교합니다. 차이가 있으면 빨갛게 표시됩니다. 완료된 건은 완료 시각이, 아직 안 된 건은 <b>입고 예정</b>이 나옵니다.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h4>B. 파손 보고 현황 보기 (탭: <span class="ui-tab">파손 보고</span>)</h4>
+    <ol class="steps">
+      <li>자기 회사 파손 건이 카드로 나옵니다. 카드에는 <span class="chip warn">센터 확인 중</span> 또는 <span class="chip ok">센터 확인 완료</span> 표시가 있습니다.</li>
+      <li>파손 내용과 사진을 보고, 센터가 통보한 시각이 있으면 함께 확인합니다.</li>
+    </ol>
+    <p class="muted">화주사 화면에서는 파손을 새로 보고할 수 없고, 보기만 할 수 있습니다.</p>
+  </div>
+
+  <div class="card">
+    <h4>C. 센터 문의에 답하기 (탭: <span class="ui-tab">센터 문의함</span>)</h4>
+    <ol class="steps">
+      <li>센터가 보낸 문의는 <span class="chip warn">답변 필요</span> 카드로 나옵니다.</li>
+      <li>문의 내용을 읽고 <span class="ui-field">센터에 보낼 답을 적어 주세요</span> 칸에 답을 적습니다.</li>
+      <li><span class="ui-btn solid">전송</span>을 누릅니다. 전송하면 카드에 <span class="chip ok">답변 보냄</span>이 붙고, 센터가 확인할 수 있게 됩니다.</li>
+    </ol>
+    <div class="callout warn">
+      <b>한 번 보낸 답은 화면에서 고칠 수 없습니다</b>
+      보내기 전에 한 번 더 확인해 주세요. 수정이 필요하면 센터 담당자에게 직접 알려 주세요.
+    </div>
+  </div>
+
+  <!-- 참고: 화주사의 규칙 질문 -->
+  <p class="muted">화주사 담당자는 규칙 질문과 지침서·계약서 원문을 볼 수 없습니다. 계약 내용은 화주사에 공개되지 않습니다.</p>
+</section>
+
+<!-- ───────── 5. 업무 흐름 ───────── -->
+<section class="main" id="flows">
+  <h2>4. 업무 흐름 3가지</h2>
+  <p class="muted">화살표 순서대로 읽으시면 됩니다. 각 상자 아래 글씨는 그 단계에서 하는 일입니다.</p>
+
+  <!-- (a) 파손 -->
+  <h3>(a) 파손 발생 → 보고 → 관리자 확인 → 화주사 통보</h3>
+  <div class="flow" role="img" aria-label="파손 발생, 보고, 관리자 확인, 화주사 통보 흐름">
+    <div class="box"><b>① 작업자 보고</b><span>파손 보고 탭에서 사진·입고 물건 필수<br>발견 시각 자동 기록</span></div>
+    <div class="arr"></div>
+    <div class="box"><b>② 자동 안내</b><span>그 화주사 지침의 처리 방법 첨부<br>통보 마감 시각 계산</span></div>
+    <div class="arr"></div>
+    <div class="box warn"><b>③ 관리자 확인</b><span>파손함에서 확인 처리<br>처리 메모 기록</span></div>
+    <div class="arr"></div>
+    <div class="box"><b>④ 화주사 통보</b><span>통보했으면 '화주사에 통보함' 체크<br>또는 '화주사 통보 완료 기록'</span></div>
+    <div class="arr"></div>
+    <div class="box ok"><b>⑤ 화주사 확인</b><span>화주사 파손 보고 탭에<br>센터 확인 완료·통보 시각 표시</span></div>
+  </div>
+  <div class="callout bad">
+    <b>30분 규칙</b>
+    보고 후 30분이 지나도 확인되지 않으면 요약 탭에 빨간 띠가 뜨고, 센터장 화면 맨 위에 "센터장 알림"이 표시됩니다. 휴대폰 문자나 푸시 알림은 아직 없습니다.
+  </div>
+
+  <!-- (b) 질문 -->
+  <h3>(b) 지침서에 없는 질문 → 관리자 → 화주사 → 답변 저장</h3>
+  <div class="flow" role="img" aria-label="지침서에 없는 질문이 관리자, 화주사를 거쳐 답변으로 저장되는 흐름">
+    <div class="box"><b>① 작업자 질문</b><span>규칙 질문 탭에서 질문<br>근거 없음 표시</span></div>
+    <div class="arr"></div>
+    <div class="box"><b>② 확인 요청</b><span>관리자에게 확인 요청<br>질문함에 '새 질문'</span></div>
+    <div class="arr"></div>
+    <div class="box warn"><b>③ 관리자 판단</b><span>안전·보관·계약 관련이면<br>'화주사 확인 필요' 자동 체크</span></div>
+  </div>
+  <div class="fork-label">③에서 세 가지 중 하나를 고릅니다</div>
+  <div class="branch">
+    <div class="box"><b>A. 바로 답변</b><span>관리자 판단으로 답을 적고 작업자에게 바로 전달</span></div>
+    <div class="box"><b>B. 화주사에 문의</b><span>화주사 센터 문의함에서 화주사가 답 → 관리자가 확인</span></div>
+    <div class="box"><b>C. 외부 확인 기록</b><span>전화·메일로 화주사에 확인한 내용을 기록 → 화주사 답 도착</span></div>
+  </div>
+  <div class="flow" role="img" aria-label="답변을 작업자에게 전달하고 센터 답변으로 저장하는 흐름">
+    <div class="box"><b>④ 작업자에게 전달</b><span>답은 관리자가 다듬어도 됩니다<br>(B·C는 '작업자에게 전달')</span></div>
+    <div class="arr"></div>
+    <div class="box ok"><b>⑤ 센터 답변으로 저장</b><span>같은 화주사·같은 질문이 오면<br>규칙 질문에 '센터 답변'으로 바로 표시</span></div>
+  </div>
+
+  <!-- (c) 지침서 개정 -->
+  <h3>(c) 지침서 개정 업로드 → 바뀐 조항 → 작업자 확인</h3>
+  <div class="flow" role="img" aria-label="지침서 개정 업로드부터 작업자 읽음 확인까지의 흐름">
+    <div class="box"><b>① 새 판 올리기</b><span>지침서·계약서 탭에서<br>텍스트 파일 업로드</span></div>
+    <div class="arr"></div>
+    <div class="box"><b>② 자동 비교</b><span>예전 판은 보관, 새 판이 현행<br>조항별 추가·변경·삭제 계산</span></div>
+    <div class="arr"></div>
+    <div class="box"><b>③ 바뀐 조항 확인</b><span>관리자가 요약과 조항별 전·후 원문 확인</span></div>
+    <div class="arr"></div>
+    <div class="box"><b>④ 작업자 알림</b><span>내 작업 맨 위에 📢 개정 알림<br>(최근 14일)</span></div>
+    <div class="arr"></div>
+    <div class="box ok"><b>⑤ 읽었습니다</b><span>작업자가 판마다 한 번 확인<br>관리자는 읽음 현황 확인</span></div>
+  </div>
+  <div class="callout warn">
+    <b>이전에 받은 답도 다시 확인합니다</b>
+    지침서나 계약서가 새 판이 되면, 그 화주사의 저장된 센터 답변에 <span class="chip warn">재확인 필요</span> 표시가 붙습니다. 관리자가 확인한 뒤 <b>재확인 완료</b>를 누릅니다.
+  </div>
+</section>
+
+<!-- ───────── 6. 자주 묻는 질문 ───────── -->
+<section class="main" id="faq">
+  <h2>5. 자주 묻는 질문</h2>
+
+  <div class="card faq">
+    <p class="q">Q1. 답이 '근거 없음'으로 나오면 어떻게 하나요?</p>
+    <p class="a">화면에 "지침서에 없는 내용이에요"라고 나옵니다. 현장에서 혼자 정하지 말고 <b>관리자에게 확인 요청</b>을 누르세요. 관리자 답은 작업자의 <b>내 질문</b> 탭에 나타납니다. 급하면 관리자에게 직접 말해서 판단을 받으세요.</p>
+  </div>
+
+  <div class="card faq">
+    <p class="q">Q2. 화면이 안 열리거나 멈춘 것처럼 보여요.</p>
+    <p class="a">
+      ① 처음 여는 것이라면 1분 정도 기다리세요. 무료 서버가 깨어나는 시간입니다.<br>
+      ② 새로고침을 한 번 해 보세요.<br>
+      ③ "로그인이 만료되었습니다"가 나오면 다시 로그인하세요. 로그인은 12시간 뒤에 만료됩니다.<br>
+      ④ "처리 서버에 연결할 수 없습니다"가 계속 나오면 휴대폰이나 PC의 인터넷 연결을 확인한 뒤, 운영 담당자에게 알려 주세요.
+    </p>
+  </div>
+
+  <div class="card faq">
+    <p class="q">Q3. 파손 사진이 꼭 필요한가요?</p>
+    <p class="a">네, 필수입니다. 사진이 없으면 <b>관리자에게 바로 보고</b> 버튼이 켜지지 않고, 서버도 보고를 받지 않습니다. 사진은 보고할 때 자동으로 작게 줄어서 저장됩니다.</p>
+  </div>
+
+  <div class="card faq">
+    <p class="q">Q4. 30분이 지나면 관리자나 센터장에게 문자가 자동으로 가나요?</p>
+    <p class="a">아닙니다. 지금은 <b>화면 안의 알림</b>만 있습니다. 요약 탭의 빨간 띠와 센터장 화면 맨 위의 알림으로 확인합니다. 문자나 푸시 알림은 아직 없습니다.</p>
+  </div>
+
+  <div class="card faq">
+    <p class="q">Q5. 실제 수량을 잘못 눌러서 입고 완료를 했어요.</p>
+    <p class="a">완료한 입고의 수량을 고치는 화면은 아직 없습니다. 바로 관리자에게 알리고, 운영 담당자에게 수정을 요청하세요. 이미 완료된 작업을 다시 완료할 수는 없습니다.</p>
+  </div>
+
+  <div class="card faq">
+    <p class="q">Q6. 화주사 통보 기한이 "관리자 판단"이라고 나와요. 왜 그런가요?</p>
+    <p class="a">그 화주사의 현행 지침서에서 파손 조항에 "N시간 안"이나 "당일 안"이라는 문구를 찾지 못했다는 뜻입니다. 시스템은 기한을 추측해서 넣지 않습니다. 관리자가 계약과 지침서를 확인해서 정해 주세요.</p>
+  </div>
+
+  <div class="card faq">
+    <p class="q">Q7. AI가 찾은 답을 그대로 믿어도 되나요?</p>
+    <p class="a">근거 조항 원문을 꼭 읽고 확인하세요. AI는 관련 조항을 찾아 주는 도구입니다. 파손 책임 판단과 최종 처리는 사람이 합니다. 지침서와 계약서가 서로 다르면 AI가 어느 쪽이 맞는지 정하지 않고, "화주사와 확인이 필요합니다"라고 표시합니다.</p>
+  </div>
+</section>
+
+<!-- ───────── 7. 인수인계 ───────── -->
+<section class="main" id="handover">
+  <h2>6. 인수인계 (운영 담당자용)</h2>
+  <p class="muted">이 장은 시스템을 맡는 운영 담당자를 위한 내용입니다. 비밀번호, 데이터베이스 주소, API 키는 이 문서에 적지 않았습니다. 서버 환경변수에서만 관리하세요.</p>
+
+  <h4>시스템 구성</h4>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>구분</th><th>내용</th></tr></thead>
+      <tbody>
+        <tr><td>화면 (웹)</td><td>Next.js. 작업자·관리자·센터장·화주사가 쓰는 화면</td></tr>
+        <tr><td>처리 서버 (API)</td><td>NestJS. 권한 확인, 입고·파손·문서·질문 처리</td></tr>
+        <tr><td>데이터베이스</td><td>PostgreSQL (Prisma로 접근)</td></tr>
+        <tr><td>AI 기능</td><td>규칙 질문과 파손 처리 방법 찾기에 사용. 지침 조항 검색용 임베딩과 답변 모델을 씁니다. AI 연결이 없으면 키워드 검색으로 바꿔 조항 원문을 그대로 보여 줍니다.</td></tr>
+        <tr><td>호스팅</td><td>Render. 화면: <span class="url">hanbit-wms-web.onrender.com</span> · 처리 서버: <span class="url">hanbit-wms-api.onrender.com</span></td></tr>
+        <tr><td>코드 저장소</td><td><span class="url"><a href="https://github.com/hyliliana/hanbit-wms-lite">https://github.com/hyliliana/hanbit-wms-lite</a></span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h4>새 지침서·계약서 등록 방법</h4>
+  <div class="card">
+    <ol class="steps">
+      <li>문서를 텍스트 파일(.md 또는 .txt)로 준비합니다. PDF는 올릴 수 없습니다.</li>
+      <li>맨 위에 <code># 문서 제목</code>을 적습니다. 없으면 제목은 "문서"로 표시됩니다.</li>
+      <li>조항마다 <code>## 제N조 (조항명)</code>으로 시작합니다. 이 형식이 없으면 등록이 거부됩니다.</li>
+      <li>관리자 계정으로 로그인해 <span class="ui-tab">지침서·계약서</span> 탭에서 <b>화주사</b>와 <b>종류</b>를 고르고 파일을 올린 뒤 <span class="ui-btn solid">올리고 비교하기</span>를 누릅니다.</li>
+      <li>판 번호는 자동으로 하나씩 올라갑니다. 예전 판은 보관되고, 같은 화주사·같은 종류의 현행 문서는 하나만 남습니다.</li>
+      <li>결과 화면에서 바뀐 조항을 확인합니다. 작업자에게는 14일 동안 개정 알림이 뜹니다.</li>
+    </ol>
+    <p class="muted">예시 (형식만 참고하세요):</p>
+    <pre class="sample"># ○○ 취급 지침서 (제2판)
+
+## 제1조 (적용 범위)
+...
+
+## 제5조 (파손 입고 시 처리)
+... 발견 후 N시간 안에 화주사에 통보합니다 ...
+... 또는 "발견 당일 안에 통보합니다" ...</pre>
+    <p class="muted">조항명에 <b>'파손'</b>이 들어가고 본문에 "N시간 안" 또는 "당일 안"이 있으면, 파손 보고 때 통보 기한이 자동으로 계산됩니다. 문구를 바꿀 때는 이 표현을 기준으로 맞춰 주세요.</p>
+  </div>
+
+  <h4>계정 추가와 변경</h4>
+  <div class="card">
+    <p>계정 추가, 역할 변경, 비밀번호 재설정은 화면에서 할 수 없습니다. <b>운영 담당자에게 요청</b>하세요.</p>
+    <div class="callout warn">
+      <b>실운영 전에 점검할 항목</b>
+      로그인 화면은 등록된 계정 목록을 그대로 보여 주고, "시연 비밀번호" 안내 문구가 고정되어 있습니다. 실제 운영 전에는 이 목록과 안내 문구를 빼거나 제한하는 것을 검토하세요.
+    </div>
+  </div>
+
+  <h4>알려진 한계</h4>
+  <div class="card">
+    <ul class="dots">
+      <li><b>무료 서버라 첫 접속이 느립니다.</b> 쓰지 않는 시간이 지나면 서버가 잠들고, 다시 깨어나는 데 약 1분 걸릴 수 있습니다.</li>
+      <li><b>AI 답변은 반드시 근거 조항을 확인해야 합니다.</b> 근거 조항 원문과 실제 지침서를 대조해서 쓰세요.</li>
+      <li><b>바코드는 지원하지 않습니다.</b> 입고 물건은 목록에서 고르고, 라벨 번호는 직접 입력합니다.</li>
+      <li><b>엑셀 품목정보 연동은 다음 단계입니다.</b> 지금은 품목을 데이터베이스에 직접 등록해야 합니다.</li>
+      <li>지침서 업로드는 텍스트(.md/.txt)만 됩니다. PDF는 변환해서 올려야 합니다.</li>
+      <li>문자나 푸시 알림은 없습니다. 30분 알림과 통보 기한은 화면에서만 확인합니다.</li>
+      <li>입고 완료 후 수량을 고치는 화면은 없습니다.</li>
+      <li>작업자를 지정해서 배정하는 화면은 없습니다. 미배정 작업은 먼저 완료한 작업자에게 배정됩니다.</li>
+      <li>지침서와 계약서가 충돌하면 경고만 표시합니다. 화주사와 확인한 결과를 기록하는 곳은 아직 없습니다.</li>
+      <li>파손 책임 판정, 출고 순서 자동 배정은 시스템이 하지 않습니다.</li>
+    </ul>
+  </div>
+
+  <h4>다음 단계 제안</h4>
+  <div class="card">
+    <ol class="steps">
+      <li><b>엑셀 품목정보 연동.</b> 화주사 품목 목록을 파일로 한 번에 등록합니다. 화주사마다 양식이 달라서 먼저 양식을 확인해야 합니다.</li>
+      <li><b>알림 채널 추가.</b> 30분을 넘긴 파손과 통보 기한이 가까운 건을 문자나 푸시로 알려 줍니다.</li>
+      <li><b>지침서·계약서 충돌 확인 기록.</b> 화주사와 확인한 결과를 남기는 기능을 만들어, 같은 충돌을 반복해서 묻지 않게 합니다.</li>
+    </ol>
+  </div>
+
+  <div class="footer">
+    한빛 WMS Lite 사용설명서 · 작성일 2026-11-13 · 한빛물류 이천센터<br>
+    이 문서는 현재 화면과 서버 규칙을 기준으로 작성했습니다. 화면이나 규칙이 바뀌면 함께 고쳐 주세요.
+  </div>
+</section>
+
+</div>
+</body>
+</html>
