@@ -23,6 +23,13 @@ const OFFICE = ["ADMIN", "MANAGER"] as const;
 /** 인터뷰(장 씨): "파손 보고는 관리자가 30분 안에는 확인해야 해요" */
 const DAMAGE_SLA_MIN = 30;
 
+/** 한국 시간 기준 그날 23:59:59 */
+function endOfDayKst(d: Date) {
+  const k = new Date(d.getTime() + 9 * 3600e3);
+  k.setUTCHours(23, 59, 59, 0);
+  return new Date(k.getTime() - 9 * 3600e3);
+}
+
 const int = (v: any) => (v === undefined || v === null || v === "" ? undefined : Number(v));
 
 @Controller()
@@ -158,6 +165,10 @@ export class WmsController {
     const q = `파손 입고 시 처리 방법과 보고 기한, 사진 기준, 파손 책임. 상황: ${b.description}`;
     const cites = await this.ai.search(shipper.id, q, 3);
     const ans = await this.ai.answer(shipper.name, `이 파손을 어떻게 처리해야 하나요? 상황: ${b.description}`, cites);
+    // 통보 기한: 현행 지침서의 '파손' 조항에서 "N시간 안에"를 그대로 읽는다 (AI 추정 아님)
+    // 근거: 보관계약서 제6조 — 지침서 기한 안에 통보하지 않으면 늘어난 손해를 센터가 부담
+    const notify = await this.notifyDeadline(shipper.id);
+    const now = new Date();
     return this.prisma.damageReport.create({
       data: {
         shipperId: shipper.id,
@@ -169,8 +180,26 @@ export class WmsController {
         photo: b.photo || null,
         aiGuidance: ans.answer,
         aiCitations: cites.map((c) => ({ title: c.title, version: c.version, section: c.section, text: c.text })),
+        notifyHours: notify?.hours ?? null,
+        notifyDueAt: notify ? (notify.hours ? new Date(now.getTime() + notify.hours * 3600e3) : endOfDayKst(now)) : null,
+        notifySource: notify?.source ?? null,
       },
     });
+  }
+
+  private async notifyDeadline(shipperId: number) {
+    const chunks = await this.prisma.docChunk.findMany({
+      where: { document: { shipperId, kind: "GUIDE", isCurrent: true }, section: { contains: "파손" } },
+      include: { document: true },
+      orderBy: { order: "asc" },
+    });
+    for (const c of chunks) {
+      const source = `${c.document.title.split(" (")[0]} 제${c.document.version}판 · ${c.section}`;
+      const m = c.text.match(/(\d+)\s*시간\s*(?:안|이내)/);
+      if (m) return { hours: Number(m[1]), source };
+      if (/당일\s*(?:안|이내|중)/.test(c.text)) return { hours: null as number | null, source: `${source} (발견 당일)` };
+    }
+    return null;
   }
 
   @Get("damages")
@@ -186,7 +215,7 @@ export class WmsController {
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],
     });
     // 화주사에게는 센터 내부 처리 지침(AI 첨부·근거 원문)을 내려보내지 않는다
-    if (u.role === "SHIPPER") return rows.map(({ aiGuidance, aiCitations, ...r }) => r);
+    if (u.role === "SHIPPER") return rows.map(({ aiGuidance, aiCitations, notifySource, ...r }) => r);
     return rows;
   }
 
@@ -198,21 +227,35 @@ export class WmsController {
     if (d.status === "CONFIRMED") throw new BadRequestException("이미 확인한 보고입니다");
     return this.prisma.damageReport.update({
       where: { id },
-      data: { status: "CONFIRMED", confirmedById: req.user.id, confirmedAt: new Date(), managerNote: b?.managerNote || null },
+      data: {
+        status: "CONFIRMED", confirmedById: req.user.id, confirmedAt: new Date(), managerNote: b?.managerNote || null,
+        ...(b?.notified ? { notifiedAt: new Date(), notifiedById: req.user.id } : {}),
+      },
     });
+  }
+
+  /** 화주사 통보 완료 기록 (확인 뒤에 따로 기록할 수도 있음) */
+  @Roles(...OFFICE)
+  @Post("damages/:id/notified")
+  async markNotified(@Req() req: any, @Param("id", ParseIntPipe) id: number) {
+    const d = await this.prisma.damageReport.findUnique({ where: { id } });
+    if (!d) throw new NotFoundException("보고가 없습니다");
+    if (d.notifiedAt) throw new BadRequestException("이미 통보 완료로 기록했습니다");
+    return this.prisma.damageReport.update({ where: { id }, data: { notifiedAt: new Date(), notifiedById: req.user.id } });
   }
 
   // ───────── 관리자 요약 ─────────
   @Roles(...OFFICE)
   @Get("dashboard")
   async dashboard() {
-    const [unconfirmed, overdue, planned, doneWithDiff] = await Promise.all([
+    const [unconfirmed, overdue, notifyOverdue, planned, doneWithDiff] = await Promise.all([
       this.prisma.damageReport.count({ where: { status: "REPORTED" } }),
       this.prisma.damageReport.count({ where: { status: "REPORTED", createdAt: { lt: new Date(Date.now() - DAMAGE_SLA_MIN * 60e3) } } }),
+      this.prisma.damageReport.count({ where: { notifiedAt: null, notifyDueAt: { lt: new Date() } } }),
       this.prisma.workOrder.count({ where: { status: "PLANNED" } }),
       this.prisma.workOrder.findMany({ where: { status: "DONE" }, select: { expectedQty: true, actualQty: true } }),
     ]);
-    return { unconfirmedDamages: unconfirmed, overdueDamages: overdue, damageSlaMinutes: DAMAGE_SLA_MIN, plannedOrders: planned, qtyMismatches: doneWithDiff.filter((w) => w.actualQty !== w.expectedQty).length };
+    return { unconfirmedDamages: unconfirmed, overdueDamages: overdue, notifyOverdue, damageSlaMinutes: DAMAGE_SLA_MIN, plannedOrders: planned, qtyMismatches: doneWithDiff.filter((w) => w.actualQty !== w.expectedQty).length };
   }
 
   // ───────── 문서 (지침서·계약서) ─────────

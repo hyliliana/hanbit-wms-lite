@@ -309,6 +309,7 @@ function DamageForm({ api, shippers, preset, onDone }: { api: Api; shippers: any
         <h3>이 화주사의 파손 처리 방법</h3>
         <div className="answer">{result.aiGuidance}</div>
         <Citations list={result.aiCitations} />
+        <NotifyDue d={result} />
         <p className="muted">최종 처리는 관리자가 확인한 뒤 정합니다.</p>
         <button className="btn big" onClick={() => onDone("파손 보고 완료 · 관리자 확인을 기다립니다")}>확인</button>
       </div>
@@ -363,6 +364,7 @@ function Manager({ api, user }: { api: Api; user: User }) {
       {tab === "home" && dash && (
         <div className="grid">
           <div className="card" onClick={() => setTab("damage")} style={{ cursor: "pointer", borderColor: dash.overdueDamages ? "var(--bad)" : undefined }}><div className="muted">{dash.damageSlaMinutes}분 넘게 확인 안 된 파손</div><div className="stat" style={{ color: dash.overdueDamages ? "var(--bad)" : "var(--ok)" }}>{dash.overdueDamages}</div><div className="muted">현장 기준: 관리자가 {dash.damageSlaMinutes}분 안에 확인</div></div>
+          <div className="card" onClick={() => setTab("damage")} style={{ cursor: "pointer", borderColor: dash.notifyOverdue ? "var(--bad)" : undefined }}><div className="muted">화주사 통보 기한 지난 파손</div><div className="stat" style={{ color: dash.notifyOverdue ? "var(--bad)" : "var(--ok)" }}>{dash.notifyOverdue}</div><div className="muted">기한은 각 화주사 지침서 · 늦으면 계약서상 센터 부담</div></div>
           <div className="card" onClick={() => setTab("damage")} style={{ cursor: "pointer" }}><div className="muted">미확인 파손 보고</div><div className="stat" style={{ color: dash.unconfirmedDamages ? "var(--bad)" : undefined }}>{dash.unconfirmedDamages}</div></div>
           <div className="card" onClick={() => setTab("inbound")} style={{ cursor: "pointer" }}><div className="muted">수량 차이 입고</div><div className="stat" style={{ color: dash.qtyMismatches ? "var(--bad)" : undefined }}>{dash.qtyMismatches}</div></div>
           <div className="card" onClick={() => setTab("inbound")} style={{ cursor: "pointer" }}><div className="muted">대기 중 입고 작업</div><div className="stat">{dash.plannedOrders}</div></div>
@@ -377,14 +379,33 @@ function Manager({ api, user }: { api: Api; user: User }) {
   );
 }
 
+function NotifyDue({ d }: { d: any }) {
+  if (!d.notifyDueAt) return <div className="diffbox chg"><b>화주사 통보 기한:</b> 지침서에서 기한을 찾지 못했습니다. 화주사에 확인하세요.</div>;
+  const left = Math.round((new Date(d.notifyDueAt).getTime() - Date.now()) / 60000);
+  const late = !d.notifiedAt && left < 0;
+  const leftText = left >= 60 ? `${Math.floor(left / 60)}시간 ${left % 60}분 남음` : left >= 0 ? `${left}분 남음` : `${Math.abs(left)}분 지남`;
+  return (
+    <div className={`diffbox ${d.notifiedAt ? "add" : late ? "del" : "chg"}`}>
+      <b>화주사 통보 마감 {fmtTime(d.notifyDueAt)}</b> ({d.notifyHours ? `${d.notifyHours}시간 안` : "발견 당일 안"}) ·{" "}
+      {d.notifiedAt ? `통보 완료 ${fmtTime(d.notifiedAt)}` : late ? <b style={{ color: "var(--bad)" }}>{leftText} · 계약서상 늦은 통보로 늘어난 손해는 센터 부담</b> : leftText}
+      {d.notifySource && <div className="muted">근거: {d.notifySource}</div>}
+    </div>
+  );
+}
+
 function DamageInbox({ api, onChange }: { api: Api; onChange: () => void }) {
   const [list, setList] = useState<any[]>([]);
   const [note, setNote] = useState<Record<number, string>>({});
+  const [notified, setNotified] = useState<Record<number, boolean>>({});
   const [err, setErr] = useState("");
   const load = useCallback(() => api("/damages").then(setList).catch((e) => setErr(e.message)), [api]);
   useEffect(() => { load(); const t = setInterval(load, 10000); return () => clearInterval(t); }, [load]);
   const confirm = async (d: any) => {
-    try { await api(`/damages/${d.id}/confirm`, { method: "POST", body: { managerNote: note[d.id] } }); load(); onChange(); }
+    try { await api(`/damages/${d.id}/confirm`, { method: "POST", body: { managerNote: note[d.id], notified: !!notified[d.id] } }); load(); onChange(); }
+    catch (e: any) { setErr(e.message); }
+  };
+  const markNotified = async (d: any) => {
+    try { await api(`/damages/${d.id}/notified`, { method: "POST" }); load(); onChange(); }
     catch (e: any) { setErr(e.message); }
   };
   return (
@@ -406,13 +427,18 @@ function DamageInbox({ api, onChange }: { api: Api; onChange: () => void }) {
           <h3 style={{ marginTop: 10 }}>지침서 기준 처리 방법 (AI가 찾은 근거)</h3>
           <div className="answer">{d.aiGuidance}</div>
           <Citations list={d.aiCitations} />
+          <NotifyDue d={d} />
           {d.status === "REPORTED" ? (
             <div className="row" style={{ marginTop: 10 }}>
+              <label className="row" style={{ margin: 0, color: "var(--ink)" }}><input type="checkbox" style={{ width: "auto" }} checked={!!notified[d.id]} onChange={(e) => setNotified({ ...notified, [d.id]: e.target.checked })} /> 화주사에 통보함</label>
               <input style={{ flex: 1, minWidth: 200 }} placeholder="처리 메모 (예: 격리 칸 이동, 화주사 통보 완료)" value={note[d.id] ?? ""} onChange={(e) => setNote({ ...note, [d.id]: e.target.value })} />
               <button className="btn" onClick={() => confirm(d)}>확인 처리</button>
             </div>
           ) : (
-            <p className="muted">확인: {d.confirmedBy?.name} · {fmtTime(d.confirmedAt)} {d.managerNote ? `· ${d.managerNote}` : ""}</p>
+            <div className="row" style={{ marginTop: 8 }}>
+              <p className="muted" style={{ margin: 0 }}>확인: {d.confirmedBy?.name} · {fmtTime(d.confirmedAt)} {d.managerNote ? `· ${d.managerNote}` : ""}</p>
+              {!d.notifiedAt && <button className="btn ghost" onClick={() => markNotified(d)}>화주사 통보 완료 기록</button>}
+            </div>
           )}
         </div>
       ))}
@@ -607,6 +633,7 @@ function ShipperView({ api, user }: { api: Api; user: User }) {
               <p>{d.description}</p>
               {d.photo && <img src={d.photo} className="photo" alt="파손 사진" />}
               {d.managerNote && <p className="muted">센터 메모: {d.managerNote}</p>}
+              {d.notifiedAt && <p className="muted">센터 통보: {fmtTime(d.notifiedAt)}</p>}
             </div>
           ))}
         </>

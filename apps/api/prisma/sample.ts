@@ -90,6 +90,19 @@ async function main() {
     });
     console.log(`문서 ${file}: 조항 ${sections.length}개, 임베딩 ${embeds[0]?.length ? "있음" : "없음(키워드 검색)"}`);
   }
+  // 시연용: 2시간 반 전에 보고됐지만 아직 아무도 확인하지 않은 파손 (30분 기준·통보 기한 모두 넘김)
+  const reported = new Date(Date.now() - 150 * 60e3);
+  const desc = "냉장차 하차 중 우유 박스 2개 바닥이 젖어 있음. 단체방에 올렸으나 확인 없음";
+  const cites = await ai.search(fresh.id, `파손 입고 시 처리 방법과 보고 기한. 상황: ${desc}`, 3);
+  const ans = await ai.answer(fresh.name, `이 파손을 어떻게 처리해야 하나요? 상황: ${desc}`, cites);
+  await prisma.damageReport.create({
+    data: {
+      shipperId: fresh.id, itemId: milk.id, reporterId: jang.id, qty: 2, description: desc, createdAt: reported,
+      aiGuidance: ans.answer, aiCitations: cites.map((c) => ({ title: c.title, version: c.version, section: c.section, text: c.text })),
+      notifyHours: 2, notifyDueAt: new Date(reported.getTime() + 2 * 3600e3), notifySource: "신선마켓(FRESH) 물류 취급 지침서 제1판 · 제4조 (파손 입고 시 처리)",
+    },
+  });
+
   console.log("가상 데이터를 넣었습니다.");
 }
 

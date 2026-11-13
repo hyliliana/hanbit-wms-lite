@@ -143,6 +143,11 @@ model DamageReport {
   status        DamageStatus @default(REPORTED)
   aiGuidance    String?
   aiCitations   Json?
+  notifyHours   Int? // 지침서에 적힌 화주사 통보 기한(시간)
+  notifyDueAt   DateTime? // 통보 마감 시각 = 보고 시각 + 기한
+  notifySource  String? // 기한의 근거 조항
+  notifiedAt    DateTime? // 화주사 통보 완료 시각
+  notifiedById  Int?
   managerNote   String?
   confirmedById Int?
   confirmedBy   User?        @relation("confirmer", fields: [confirmedById], references: [id])
